@@ -18,6 +18,8 @@ const C = {
   pad: new Color("#d9d3c5"),
   park: new Color("#74b65a"),
   plaza: new Color("#e7e0cf"),
+  lawn: new Color("#9cc979"),
+  lawnDark: new Color("#93c171"),
   road: new Color("#b9b5ad"),
   earth: new Color("#8c7558"),
   water: new Color("#5aa6d1"),
@@ -90,6 +92,7 @@ function faceColor(
   switch (s) {
     case Surface.pad: return C.pad;
     case Surface.plaza: return C.plaza;
+    case Surface.lawn: return jitter(i, j) > 0.5 ? C.lawn : C.lawnDark;
     case Surface.road: return C.road;
     case Surface.park: return C.park;
   }

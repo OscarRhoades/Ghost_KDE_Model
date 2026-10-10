@@ -28,6 +28,8 @@ const DOUBLE_TAP_TIME = 400;
 const DOUBLE_TAP_SLOP = 30;
 /** View height (m) when returning from street level, for local context. */
 const RETURN_VIEW = 320;
+/** Building detail streams in once the view is at most this tall (m). */
+const DETAIL_VIEW = 1100;
 
 /** Camera actions for on-screen buttons and other UI. */
 export interface IsoControls {
@@ -261,6 +263,8 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
             y: target.y,
             z: target.z,
             radius: (viewHeight / 2) * Math.max(1, aspect) * 1.3,
+            // Street-level detail only once zoomed in far enough to see it.
+            detailRadius: viewHeight <= DETAIL_VIEW ? (viewHeight / 2) * Math.max(1, aspect) * 1.2 : 0,
           });
         },
       });

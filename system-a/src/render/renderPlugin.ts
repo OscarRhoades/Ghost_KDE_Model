@@ -15,12 +15,14 @@ import {
 import { defineResource, type World } from "../ecs/world";
 import { FocusR, SceneObject } from "../engine/components";
 import type { Plugin } from "../engine/engine";
+import { createSky, SKY, type Sky } from "./sky";
 
 export const SceneR = defineResource<Scene>("Scene");
 export const RendererR = defineResource<WebGLRenderer>("Renderer");
 /** The camera the renderer draws with; camera systems set it when active. */
 export const ActiveCameraR = defineResource<Camera>("ActiveCamera");
 export const SunR = defineResource<DirectionalLight>("Sun");
+export const SkyR = defineResource<Sky>("Sky");
 
 export interface RenderOptions {
   container: HTMLElement;
@@ -29,7 +31,8 @@ export interface RenderOptions {
 }
 
 export const PALETTE = {
-  sky: new Color("#cfe3ee"),
+  /** Horizon color, used for fog. */
+  sky: SKY.horizon,
   hemiSky: new Color("#e8f3ff"),
   hemiGround: new Color("#b9a98c"),
   sun: new Color("#fff4e0"),
@@ -54,9 +57,14 @@ export function renderPlugin(opts: RenderOptions): Plugin {
           opts.container.appendChild(renderer.domElement);
 
           const scene = new Scene();
-          scene.background = PALETTE.sky;
+          const sky = createSky(renderer);
+          scene.background = sky.backdrop;
+          // The sky lights everything a little and is what glass reflects.
+          scene.environment = sky.environment;
+          scene.environmentIntensity = 0.45;
+          scene.add(sky.dome);
           scene.fog = new Fog(PALETTE.sky, 4000, 9000);
-          scene.add(new HemisphereLight(PALETTE.hemiSky, PALETTE.hemiGround, 1.6));
+          scene.add(new HemisphereLight(PALETTE.hemiSky, PALETTE.hemiGround, 1.1));
 
           const sun = new DirectionalLight(PALETTE.sun, 2.2);
           sun.castShadow = true;
@@ -68,6 +76,7 @@ export function renderPlugin(opts: RenderOptions): Plugin {
           world.setResource(RendererR, renderer);
           world.setResource(SceneR, scene);
           world.setResource(SunR, sun);
+          world.setResource(SkyR, sky);
 
           const resize = () => {
             renderer.setSize(opts.container.clientWidth, opts.container.clientHeight);
@@ -108,7 +117,14 @@ export function renderPlugin(opts: RenderOptions): Plugin {
             cam.far = r * 6;
             cam.updateProjectionMatrix();
           }
-          world.resource(RendererR).render(world.resource(SceneR), camera);
+          // Dome at street level, flat gradient behind the orthographic map.
+          const scene = world.resource(SceneR);
+          const sky = world.resource(SkyR);
+          const perspective = (camera as { isPerspectiveCamera?: boolean }).isPerspectiveCamera === true;
+          sky.dome.visible = perspective;
+          if (perspective) sky.dome.position.copy(camera.position);
+          scene.background = perspective ? SKY.horizon : sky.backdrop;
+          world.resource(RendererR).render(scene, camera);
         },
       });
     },

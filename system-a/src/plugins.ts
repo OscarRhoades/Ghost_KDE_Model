@@ -1,5 +1,5 @@
 /** Built-in plugin sets. Order matters: systems run in registration order. */
-import { massingView } from "./buildings/massingView";
+import { buildingView } from "./buildings/buildingView";
 import { isoCamera, type IsoCameraOptions } from "./camera/isoCamera";
 import { viewModes } from "./camera/viewMode";
 import { walkCamera, type StickState } from "./camera/walkCamera";
@@ -23,7 +23,7 @@ export function viewerPlugins(opts: ViewerOptions): Plugin[] {
     renderPlugin(opts),
     terrainView(),
     roadView(),
-    massingView(),
+    buildingView(),
     isoCamera(opts.iso),
     walkCamera({ onStick: opts.onStick }),
   ];

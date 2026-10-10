@@ -43,7 +43,10 @@ src/
   render/               WebGL renderer, lights, shadow fitting, MeshBuilder
   terrain/terrainView.ts  chunked low-poly terrain, map skirt, water
   roads/roadView.ts     asphalt, sidewalks, curbs, lane markings, junctions
-  buildings/massingView.ts  placeholder massing (replaced in milestone 3)
+  buildings/kit.ts      facade toolkit: edges, panels, boxes, bands, bays
+  buildings/styles.ts   building styles (detail + massing), registerStyle()
+  buildings/buildingView.ts  tiled massing everywhere, detail streamed near the view
+  render/sky.ts         sky gradient: reflections, street-level dome, map backdrop
   camera/viewMode.ts    which camera is active; hand-off between views
   camera/isoCamera.ts   orthographic iso camera (mouse, keys, touch gestures)
   camera/walkCamera.ts  first-person walker (keys, mouse look, thumbstick)
@@ -94,11 +97,32 @@ Validation reports every problem with its path, e.g.
 `roads.edges.0.b: unknown road node "nowhere"`. See
 `public/cities/tiny.city.json` for a minimal hand-written city.
 
+## Buildings
+
+A building's `style` picks a generator in `src/buildings/styles.ts`. Each style
+draws two levels of detail: **massing** (a few triangles, used everywhere) and
+**detail** (facades, used near the camera). The city is cut into 320 m tiles.
+Tiles near the view swap their massing for detail, built a few buildings per
+frame, and drop it again once the view moves away.
+
+| Style | Look |
+|---|---|
+| `glass-tower` | curtain wall, slab edges or vertical fins, setback upper section, lobby canopy, plant-room crown, mast on the tallest |
+| `office` (also `default`) | glass with white ribbon spandrels, optional sunshade fins, rooftop plant |
+| `apartment` | light render, framed windows, timber or white balconies with glass rails, some green roofs |
+| `brick-midrise` | the same in brick, usually with shopfronts and a canopy at street level |
+| `suburban-house` | `roof: "flat"`: modernist white box with a cantilevered timber or charcoal upper floor; `gable` / `hip`: dark-roofed modern pitched house |
+| `industrial` | ribbed metal cladding, clerestory glazing, loading doors |
+| `civic` | colonnade around a glazed ground floor, tall slot windows, floating roof slab |
+
+Add a style with `registerStyle(name, { detail, massing })`, built from the
+toolkit in `kit.ts`. Unknown style names fall back to `default`.
+
 ## Roadmap
 
 1. ✅ Format, ECS core, loader; terrain and roads; isometric camera
 2. ✅ First-person walking with collision; switching between map and walk mode
-3. Parametric building generator (facades, roofs, styles), instancing and LOD
+3. ✅ Modern building generator: facades per style, reflective glass, detail streaming
 4. Generated interiors: floor plans, rooms, corridors, stairs, doors
 5. Street life: trees, lamps, benches, pedestrians, traffic
 6. Day/night cycle and weather

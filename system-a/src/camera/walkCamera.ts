@@ -20,6 +20,8 @@ const LOOK_SENSITIVITY = 0.0025; // radians per pixel (mouse)
 const TOUCH_LOOK_SENSITIVITY = 0.005;
 const STICK_RADIUS = 60; // px of thumb travel for full speed
 const MAX_PITCH = Math.PI / 2 - 0.05;
+/** Full building detail within this distance (m) of the walker. */
+const DETAIL_RADIUS = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 320 : 480;
 
 /** Thumbstick state for on-screen UI to draw. */
 export interface StickState {
@@ -42,6 +44,7 @@ export function walkCamera(opts: { onStick?: (s: StickState) => void } = {}): Pl
       const keys = new Set<string>();
       let canvas: HTMLCanvasElement;
       let savedFog: Fog | null = null;
+      const streetFog = new Fog(PALETTE.sky, 250, 1800);
       const stick: StickState = { active: false, originX: 0, originY: 0, dx: 0, dy: 0 };
       let stickPointer: number | null = null;
       const lookPointers = new Map<number, { x: number; y: number }>();
@@ -70,8 +73,9 @@ export function walkCamera(opts: { onStick?: (s: StickState) => void } = {}): Pl
             world.setResource(ActiveCameraR, camera);
             // Closer fog at street level adds depth and hides the far map edge.
             const scene = world.resource(SceneR);
-            savedFog = scene.fog as Fog | null;
-            scene.fog = new Fog(PALETTE.sky, 250, 1800);
+            // Remember the map's fog only when arriving from the map, not when hopping between spots.
+            if (scene.fog !== streetFog) savedFog = scene.fog as Fog | null;
+            scene.fog = streetFog;
           });
           view.onChange((mode) => {
             if (mode === "walk") return;
@@ -216,7 +220,7 @@ export function walkCamera(opts: { onStick?: (s: StickState) => void } = {}): Pl
           camera.position.set(pos.x, pos.y, pos.z);
           camera.rotation.set(pitch, yaw, 0, "YXZ");
 
-          world.setResource(FocusR, { x: pos.x, y: pos.y, z: pos.z, radius: 140 });
+          world.setResource(FocusR, { x: pos.x, y: pos.y, z: pos.z, radius: 140, detailRadius: DETAIL_RADIUS });
         },
       });
     },

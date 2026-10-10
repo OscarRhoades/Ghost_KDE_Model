@@ -13,6 +13,8 @@ export const Surface = {
   park: 2,
   road: 3,
   plaza: 4,
+  /** Flattened residential lot: lawn around the house. */
+  lawn: 5,
 } as const;
 export type SurfaceKind = (typeof Surface)[keyof typeof Surface];
 

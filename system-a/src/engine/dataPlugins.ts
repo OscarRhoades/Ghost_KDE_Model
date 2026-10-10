@@ -233,7 +233,7 @@ export function terrainConform(): Plugin {
             if (p.zone === "park") {
               markPolygon(hf, p.polygon, surface, Surface.park);
             } else {
-              flattenPolygon(hf, p.polygon, p.elevation, PAD_BLEND, surface, p.zone === "plaza" ? Surface.plaza : Surface.pad);
+              flattenPolygon(hf, p.polygon, p.elevation, PAD_BLEND, surface, p.zone === "plaza" ? Surface.plaza : p.zone === "residential" ? Surface.lawn : Surface.pad);
             }
           }
           for (const e of world.query(Building)) {

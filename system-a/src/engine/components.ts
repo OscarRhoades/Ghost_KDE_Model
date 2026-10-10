@@ -83,6 +83,8 @@ export interface FocusData {
   y: number;
   z: number;
   radius: number;
+  /** How far out (m) full street-level detail is wanted; 0 or absent for none. */
+  detailRadius?: number;
 }
 export const FocusR = defineResource<FocusData>("Focus");
 

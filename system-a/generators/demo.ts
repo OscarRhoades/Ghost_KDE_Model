@@ -214,7 +214,9 @@ export function generateDemo({ seed, size, cell }: DemoOptions): CityFileInput {
             const [hx, hz] = centroid(inset);
             const s = Math.min(0.85, 13 / Math.sqrt(area(inset)));
             const house = inset.map(([x, z]) => [hx + (x - hx) * s, hz + (z - hz) * s] as [number, number]);
-            addBuilding(pid, house, rng() < 0.75 ? 2 : rng() < 0.5 ? 1 : 3, "suburban-house", rng() < 0.6 ? "gable" : "hip", 3);
+            // Mostly flat-roofed modern houses, with some pitched-roof ones.
+            const roof = rng() < 0.65 ? "flat" : rng() < 0.6 ? "gable" : "hip";
+            addBuilding(pid, house, rng() < 0.75 ? 2 : rng() < 0.5 ? 1 : 3, "suburban-house", roof, 3);
           }
         }
       }
