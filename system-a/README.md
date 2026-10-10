@@ -2,8 +2,8 @@
 
 A modular, extensible engine for digital cities. Cities are **files**: a
 versioned `.city.json` format, written by hand or by generator scripts. The
-engine loads them into an ECS world and renders them in an isometric view.
-A first-person street-level mode comes in milestone 3.
+engine loads them into an ECS world, shows them in an isometric map view,
+and lets you walk the streets in first person.
 
 ```
 npm install
@@ -15,8 +15,18 @@ npm run gen -- --seed 42   # regenerate the demo city with another seed
 Open another city with `?city=cities/tiny.city.json`. Press <kbd>Ctrl</kbd>+<kbd>S</kbd>
 in the viewer to download the loaded city, serialized back through the engine.
 
-**Isometric controls:** WASD / arrow keys or drag to pan, mouse wheel to zoom
-toward the cursor, Q / E to rotate in 90° steps.
+| | Desktop | Phone |
+|---|---|---|
+| Map: pan | WASD / arrows, or drag | drag |
+| Map: zoom | mouse wheel, + / − | pinch, + / − buttons |
+| Map: rotate 90° | Q / E | two-finger twist, ⟲ ⟳ buttons |
+| Start walking | double-click a street, F, or **Walk** | double-tap a street, or **Walk** |
+| Walk / run | WASD, hold Shift to run | left-thumb stick; push it all the way to run |
+| Look around | click to capture the mouse, or drag | drag on the right side |
+| Back to the map | M, Esc, or **Map** | **Map** |
+
+Walkers collide with buildings, stay out of the water, and start on the nearest
+sidewalk, facing along the street.
 
 ## Layout
 
@@ -33,8 +43,12 @@ src/
   render/               WebGL renderer, lights, shadow fitting, MeshBuilder
   terrain/terrainView.ts  chunked low-poly terrain, map skirt, water
   roads/roadView.ts     asphalt, sidewalks, curbs, lane markings, junctions
-  buildings/massingView.ts  placeholder massing (replaced in milestone 2)
-  camera/isoCamera.ts   orthographic iso camera
+  buildings/massingView.ts  placeholder massing (replaced in milestone 3)
+  camera/viewMode.ts    which camera is active; hand-off between views
+  camera/isoCamera.ts   orthographic iso camera (mouse, keys, touch gestures)
+  camera/walkCamera.ts  first-person walker (keys, mouse look, thumbstick)
+  camera/spawn.ts       snap a drop-in point to the nearest sidewalk
+  physics/collision.ts  circle-vs-footprint collision on a spatial grid
 generators/demo.ts      the demo city generator (deterministic per seed)
 public/cities/          city files served to the viewer
 ```
@@ -83,8 +97,8 @@ Validation reports every problem with its path, e.g.
 ## Roadmap
 
 1. ✅ Format, ECS core, loader; terrain and roads; isometric camera
-2. Parametric building generator (facades, roofs, styles), instancing and LOD
-3. First-person walking with collision; switching between iso and walk mode
+2. ✅ First-person walking with collision; switching between map and walk mode
+3. Parametric building generator (facades, roofs, styles), instancing and LOD
 4. Generated interiors: floor plans, rooms, corridors, stairs, doors
 5. Street life: trees, lamps, benches, pedestrians, traffic
 6. Day/night cycle and weather

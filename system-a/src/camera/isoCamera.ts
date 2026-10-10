@@ -5,12 +5,14 @@
  *   Pan:    WASD / arrow keys, or drag with a mouse button or one finger
  *   Zoom:   mouse wheel (toward the cursor), +/- keys, or pinch
  *   Rotate: Q / E, or a two-finger twist (90° steps)
+ *   Walk:   double-click / double-tap a street, or F for the view center
  */
 import { OrthographicCamera, Vector3 } from "three";
 import { defineResource } from "../ecs/world";
 import { FocusR, TerrainR } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { ActiveCameraR, RendererR } from "../render/renderPlugin";
+import { ViewR } from "./viewMode";
 
 const ELEVATION = Math.atan(1 / Math.SQRT2);
 const DISTANCE = 3000;
@@ -18,11 +20,21 @@ const MIN_VIEW = 30;
 const MAX_VIEW = 5000;
 /** Two-finger twist (radians) that triggers a 90° rotation step. */
 const TWIST_STEP = Math.PI / 5;
+/** A press shorter than this (ms) that moves less than TAP_SLOP (px) is a tap. */
+const TAP_TIME = 300;
+const TAP_SLOP = 10;
+/** A tap starting within this many ms (and pixels) of the previous tap's release is a double tap. */
+const DOUBLE_TAP_TIME = 400;
+const DOUBLE_TAP_SLOP = 30;
+/** View height (m) when returning from street level, for local context. */
+const RETURN_VIEW = 320;
 
 /** Camera actions for on-screen buttons and other UI. */
 export interface IsoControls {
   rotate(direction: 1 | -1): void;
   zoom(factor: number): void;
+  /** Ground point at the center of the view. */
+  center(): { x: number; z: number };
 }
 export const IsoControlsR = defineResource<IsoControls>("IsoControls");
 
@@ -79,15 +91,31 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
         name: "iso-camera",
         start(world) {
           canvas = world.resource(RendererR).domElement;
+          const view = world.resource(ViewR);
+          const active = () => view.mode === "iso";
           world.setResource(ActiveCameraR, camera);
           world.setResource(IsoControlsR, {
             rotate: (d) => (step += d),
             zoom: (f) => zoomAt(f, canvas.clientWidth / 2, canvas.clientHeight / 2),
+            center: () => ({ x: target.x, z: target.z }),
+          });
+          view.register("iso", (at) => {
+            world.setResource(ActiveCameraR, camera);
+            keys.clear();
+            pointers.clear();
+            if (at) {
+              target.x = at.x;
+              target.z = at.z;
+              const terrain = world.getResource(TerrainR);
+              if (terrain) target.y = terrain.hf.heightAt(at.x, at.z);
+              viewHeight = Math.min(viewHeight, RETURN_VIEW);
+            }
           });
           window.addEventListener("keydown", (e) => {
-            if (e.metaKey || e.ctrlKey) return;
+            if (!active() || e.metaKey || e.ctrlKey) return;
             const k = e.key.toLowerCase();
-            if (k === "q") step--;
+            if (k === "f") view.switchTo("walk", { x: target.x, z: target.z });
+            else if (k === "q") step--;
             else if (k === "e") step++;
             else if (k === "+" || k === "=") zoomAt(0.8);
             else if (k === "-") zoomAt(1.25);
@@ -100,6 +128,9 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
           // pan with it, and a twist past TWIST_STEP rotates by 90°.
           const pointers = new Map<number, { x: number; y: number }>();
           let twist = 0;
+          // Tap tracking for double-tap-to-walk.
+          let down: { id: number; x: number; y: number; t: number; travel: number } | null = null;
+          let lastTap: { x: number; y: number; t: number } | null = null;
           const local = (e: PointerEvent) => {
             const r = canvas.getBoundingClientRect();
             return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -115,20 +146,38 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
           };
           canvas.addEventListener("contextmenu", (e) => e.preventDefault());
           canvas.addEventListener("pointerdown", (e) => {
+            if (!active()) return;
             canvas.setPointerCapture(e.pointerId);
-            pointers.set(e.pointerId, local(e));
+            const p = local(e);
+            pointers.set(e.pointerId, p);
             twist = 0;
+            // Event timestamps measure when the touch happened, even if frames are slow.
+            down = pointers.size === 1 ? { id: e.pointerId, ...p, t: e.timeStamp, travel: 0 } : null;
           });
           const release = (e: PointerEvent) => {
             pointers.delete(e.pointerId);
             twist = 0;
+            if (!active() || !down || down.id !== e.pointerId) return;
+            const now = e.timeStamp;
+            const tap = now - down.t < TAP_TIME && down.travel < TAP_SLOP;
+            const { x, y, t: pressedAt } = down;
+            down = null;
+            if (!tap) return;
+            if (lastTap && pressedAt - lastTap.t < DOUBLE_TAP_TIME && Math.hypot(x - lastTap.x, y - lastTap.y) < DOUBLE_TAP_SLOP) {
+              lastTap = null;
+              const g = groundAt(x, y);
+              view.switchTo("walk", { x: g.x, z: g.z });
+            } else {
+              lastTap = { x, y, t: now };
+            }
           };
           canvas.addEventListener("pointerup", release);
           canvas.addEventListener("pointercancel", release);
           canvas.addEventListener("pointermove", (e) => {
             const prev = pointers.get(e.pointerId);
-            if (!prev) return;
+            if (!prev || !active()) return;
             const next = local(e);
+            if (down?.id === e.pointerId) down.travel += Math.hypot(next.x - prev.x, next.y - prev.y);
             if (pointers.size === 1) {
               panPixels(next.x - prev.x, next.y - prev.y);
               pointers.set(e.pointerId, next);
@@ -154,6 +203,7 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
             "wheel",
             (e) => {
               e.preventDefault();
+              if (!active()) return;
               const r = canvas.getBoundingClientRect();
               zoomAt(Math.exp(e.deltaY * 0.0012), e.clientX - r.left, e.clientY - r.top);
             },
@@ -166,6 +216,7 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
           target.y = hf.heightAt(target.x, target.z);
         },
         update(world, dt) {
+          if (world.resource(ViewR).mode !== "iso") return;
           const terrain = world.getResource(TerrainR);
 
           // Keyboard pan: constant screen speed regardless of zoom.

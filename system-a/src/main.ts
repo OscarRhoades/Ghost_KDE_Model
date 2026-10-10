@@ -1,11 +1,22 @@
 import { IsoControlsR } from "./camera/isoCamera";
-import { Building, Parcel, RoadEdge } from "./engine/components";
+import { ViewR } from "./camera/viewMode";
+import type { StickState } from "./camera/walkCamera";
+import { Building, FocusR, Parcel, RoadEdge } from "./engine/components";
 import { Engine } from "./engine/engine";
 import { parseCity } from "./format/schema";
 import { coreDataPlugins, viewerPlugins } from "./plugins";
 
 const hud = document.getElementById("hud")!;
 const status = document.getElementById("status")!;
+const stickEl = document.getElementById("stick")!;
+const knobEl = stickEl.querySelector<HTMLElement>(".knob")!;
+
+function drawStick(s: StickState) {
+  stickEl.hidden = !s.active;
+  stickEl.style.left = `${s.originX}px`;
+  stickEl.style.top = `${s.originY}px`;
+  knobEl.style.transform = `translate(${s.dx}px, ${s.dy}px)`;
+}
 
 window.addEventListener("hashchange", () => location.reload());
 
@@ -16,13 +27,27 @@ async function main() {
     new URLSearchParams(location.search).get("city") ??
     (/^[\w-]+$/.test(hash) ? `cities/${hash}.city.json` : "cities/demo.city.json");
   const engine = new Engine();
-  for (const p of [...coreDataPlugins(), ...viewerPlugins({ container: document.getElementById("viewport")! })]) {
+  for (const p of [...coreDataPlugins(), ...viewerPlugins({ container: document.getElementById("viewport")!, onStick: drawStick })]) {
     engine.use(p);
   }
   engine.start();
 
   const controls = engine.world.resource(IsoControlsR);
-  for (const b of document.querySelectorAll<HTMLButtonElement>("#controls button")) {
+  const view = engine.world.resource(ViewR);
+  const modeButton = document.getElementById("mode") as HTMLButtonElement;
+  view.onChange((mode) => {
+    document.body.dataset.mode = mode;
+    modeButton.textContent = mode === "walk" ? "Map" : "Walk";
+  });
+  modeButton.addEventListener("click", () => {
+    if (view.mode === "iso") view.switchTo("walk", controls.center());
+    else {
+      // Return to the map centered on where the walker stands.
+      const f = engine.world.getResource(FocusR);
+      view.switchTo("iso", f ? { x: f.x, z: f.z } : undefined);
+    }
+  });
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#controls button[data-zoom], #controls button[data-rotate]")) {
     b.addEventListener("click", () => {
       if (b.dataset.zoom) controls.zoom(Number(b.dataset.zoom));
       if (b.dataset.rotate) controls.rotate(Number(b.dataset.rotate) as 1 | -1);
