@@ -12,6 +12,13 @@
       #hud h1 { margin: 0 0 2px; font-size: 15px; }
       #hud .keys { margin-top: 6px; color: #51606b; }
       kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid #b8c2ca; border-radius: 3px; background: #fff; }
+      #controls { position: fixed; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(2, 48px); gap: 8px; }
+      #controls button { width: 48px; height: 48px; border: 0; border-radius: 10px; background: rgba(255,255,255,0.9); color: #1f2a33; font: 600 22px/1 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,0.18); touch-action: manipulation; cursor: pointer; }
+      #controls button:active { background: #dfe9f0; }
+      #controls button:focus-visible { outline: 2px solid #2a6f97; outline-offset: 2px; }
+      .touch-only { display: none; }
+      @media (pointer: coarse) { .touch-only { display: inline; } .mouse-only { display: none; } }
+      @media (max-width: 520px) { #hud { padding: 8px 10px; font-size: 12px; } #hud h1 { font-size: 14px; } }
       #status { position: fixed; bottom: 12px; left: 12px; }
       #status.error { color: #a1271b; background: #fff; padding: 8px 12px; border-radius: 6px; white-space: pre-wrap; }
     </style>
@@ -22,8 +29,15 @@
       <h1 data-name>System-A</h1>
       <div data-stats></div>
       <div class="keys">
-        <kbd>WASD</kbd>/drag pan · <kbd>wheel</kbd> zoom · <kbd>Q</kbd><kbd>E</kbd> rotate · <kbd>Ctrl</kbd>+<kbd>S</kbd> save
+        <span class="mouse-only"><kbd>WASD</kbd>/drag pan · <kbd>wheel</kbd> zoom · <kbd>Q</kbd><kbd>E</kbd> rotate · <kbd>Ctrl</kbd>+<kbd>S</kbd> save</span>
+        <span class="touch-only">Drag to pan · pinch to zoom · twist or ⟲ ⟳ to rotate</span>
       </div>
+    </div>
+    <div id="controls" aria-label="Camera controls">
+      <button type="button" id="zoom-in" data-zoom="0.7" aria-label="Zoom in">+</button>
+      <button type="button" id="rotate-left" data-rotate="-1" aria-label="Rotate left">⟲</button>
+      <button type="button" id="zoom-out" data-zoom="1.43" aria-label="Zoom out">−</button>
+      <button type="button" id="rotate-right" data-rotate="1" aria-label="Rotate right">⟳</button>
     </div>
     <div id="status"></div>
     <script type="module" src="/src/main.ts"></script>

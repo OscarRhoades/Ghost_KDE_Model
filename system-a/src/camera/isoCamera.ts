@@ -2,11 +2,12 @@
  * Classic isometric camera: true orthographic projection at the isometric
  * elevation (35.26°), rotating in 90° steps.
  *
- *   Pan:    WASD / arrow keys, or drag with any mouse button
- *   Zoom:   mouse wheel (toward the cursor), or +/- keys
- *   Rotate: Q / E (90° steps)
+ *   Pan:    WASD / arrow keys, or drag with a mouse button or one finger
+ *   Zoom:   mouse wheel (toward the cursor), +/- keys, or pinch
+ *   Rotate: Q / E, or a two-finger twist (90° steps)
  */
 import { OrthographicCamera, Vector3 } from "three";
+import { defineResource } from "../ecs/world";
 import { FocusR, TerrainR } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { ActiveCameraR, RendererR } from "../render/renderPlugin";
@@ -15,6 +16,15 @@ const ELEVATION = Math.atan(1 / Math.SQRT2);
 const DISTANCE = 3000;
 const MIN_VIEW = 30;
 const MAX_VIEW = 5000;
+/** Two-finger twist (radians) that triggers a 90° rotation step. */
+const TWIST_STEP = Math.PI / 5;
+
+/** Camera actions for on-screen buttons and other UI. */
+export interface IsoControls {
+  rotate(direction: 1 | -1): void;
+  zoom(factor: number): void;
+}
+export const IsoControlsR = defineResource<IsoControls>("IsoControls");
 
 export interface IsoCameraOptions {
   /** Initial vertical extent of the view in meters. */
@@ -70,6 +80,10 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
         start(world) {
           canvas = world.resource(RendererR).domElement;
           world.setResource(ActiveCameraR, camera);
+          world.setResource(IsoControlsR, {
+            rotate: (d) => (step += d),
+            zoom: (f) => zoomAt(f, canvas.clientWidth / 2, canvas.clientHeight / 2),
+          });
           window.addEventListener("keydown", (e) => {
             if (e.metaKey || e.ctrlKey) return;
             const k = e.key.toLowerCase();
@@ -82,19 +96,60 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
           window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
           window.addEventListener("blur", () => keys.clear());
 
-          let dragging = false;
+          // Pointer gestures: one pointer pans; two pinch-zoom around their midpoint,
+          // pan with it, and a twist past TWIST_STEP rotates by 90°.
+          const pointers = new Map<number, { x: number; y: number }>();
+          let twist = 0;
+          const local = (e: PointerEvent) => {
+            const r = canvas.getBoundingClientRect();
+            return { x: e.clientX - r.left, y: e.clientY - r.top };
+          };
+          const pair = () => {
+            const [a, b] = [...pointers.values()];
+            return {
+              mx: (a.x + b.x) / 2,
+              my: (a.y + b.y) / 2,
+              dist: Math.hypot(b.x - a.x, b.y - a.y),
+              angle: Math.atan2(b.y - a.y, b.x - a.x),
+            };
+          };
           canvas.addEventListener("contextmenu", (e) => e.preventDefault());
           canvas.addEventListener("pointerdown", (e) => {
-            dragging = true;
             canvas.setPointerCapture(e.pointerId);
+            pointers.set(e.pointerId, local(e));
+            twist = 0;
           });
-          canvas.addEventListener("pointerup", (e) => {
-            dragging = false;
-            canvas.releasePointerCapture(e.pointerId);
-          });
+          const release = (e: PointerEvent) => {
+            pointers.delete(e.pointerId);
+            twist = 0;
+          };
+          canvas.addEventListener("pointerup", release);
+          canvas.addEventListener("pointercancel", release);
           canvas.addEventListener("pointermove", (e) => {
-            if (dragging) panPixels(e.movementX, e.movementY);
+            const prev = pointers.get(e.pointerId);
+            if (!prev) return;
+            const next = local(e);
+            if (pointers.size === 1) {
+              panPixels(next.x - prev.x, next.y - prev.y);
+              pointers.set(e.pointerId, next);
+              return;
+            }
+            const before = pair();
+            pointers.set(e.pointerId, next);
+            const after = pair();
+            if (after.dist > 0 && before.dist > 0) zoomAt(before.dist / after.dist, after.mx, after.my);
+            panPixels(after.mx - before.mx, after.my - before.my);
+            let d = after.angle - before.angle;
+            if (d > Math.PI) d -= 2 * Math.PI;
+            if (d < -Math.PI) d += 2 * Math.PI;
+            twist += d;
+            if (Math.abs(twist) > TWIST_STEP) {
+              step += Math.sign(twist);
+              twist = 0;
+            }
           });
+          // Stop Safari's own page pinch-zoom from fighting ours.
+          document.addEventListener("gesturestart", (e) => e.preventDefault());
           canvas.addEventListener(
             "wheel",
             (e) => {

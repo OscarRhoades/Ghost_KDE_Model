@@ -1,3 +1,4 @@
+import { IsoControlsR } from "./camera/isoCamera";
 import { Building, Parcel, RoadEdge } from "./engine/components";
 import { Engine } from "./engine/engine";
 import { parseCity } from "./format/schema";
@@ -19,6 +20,14 @@ async function main() {
     engine.use(p);
   }
   engine.start();
+
+  const controls = engine.world.resource(IsoControlsR);
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#controls button")) {
+    b.addEventListener("click", () => {
+      if (b.dataset.zoom) controls.zoom(Number(b.dataset.zoom));
+      if (b.dataset.rotate) controls.rotate(Number(b.dataset.rotate) as 1 | -1);
+    });
+  }
 
   status.textContent = `Loading ${url}…`;
   const res = await fetch(url);

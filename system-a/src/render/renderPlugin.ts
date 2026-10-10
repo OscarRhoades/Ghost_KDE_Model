@@ -43,8 +43,10 @@ export function renderPlugin(opts: RenderOptions): Plugin {
       engine.addSystem({
         name: "render",
         start(world) {
+          // Phones: cap resolution and shadow detail to keep frame rates up.
+          const touch = window.matchMedia("(pointer: coarse)").matches;
           const renderer = new WebGLRenderer({ antialias: true });
-          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, touch ? 1.5 : 2));
           renderer.outputColorSpace = SRGBColorSpace;
           renderer.toneMapping = ACESFilmicToneMapping;
           renderer.shadowMap.enabled = true;
@@ -58,7 +60,7 @@ export function renderPlugin(opts: RenderOptions): Plugin {
 
           const sun = new DirectionalLight(PALETTE.sun, 2.2);
           sun.castShadow = true;
-          sun.shadow.mapSize.set(4096, 4096);
+          sun.shadow.mapSize.setScalar(touch ? 2048 : 4096);
           sun.shadow.bias = -0.0004;
           sun.shadow.normalBias = 0.6;
           scene.add(sun, sun.target);
