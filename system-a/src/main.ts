@@ -6,8 +6,14 @@ import { coreDataPlugins, viewerPlugins } from "./plugins";
 const hud = document.getElementById("hud")!;
 const status = document.getElementById("status")!;
 
+window.addEventListener("hashchange", () => location.reload());
+
 async function main() {
-  const url = new URLSearchParams(location.search).get("city") ?? "cities/demo.city.json";
+  // ?city=path/to.city.json, or #name for cities/name.city.json (hash survives where queries don't).
+  const hash = location.hash.slice(1);
+  const url =
+    new URLSearchParams(location.search).get("city") ??
+    (/^[\w-]+$/.test(hash) ? `cities/${hash}.city.json` : "cities/demo.city.json");
   const engine = new Engine();
   for (const p of [...coreDataPlugins(), ...viewerPlugins({ container: document.getElementById("viewport")! })]) {
     engine.use(p);
