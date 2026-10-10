@@ -1,0 +1,3 @@
+node_modules/
+dist/
+public/cities/demo.city.json

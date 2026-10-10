@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>System-A</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe3ee; font: 13px/1.4 system-ui, sans-serif; color: #1f2a33; }
+      #viewport { position: fixed; inset: 0; }
+      #viewport canvas { display: block; touch-action: none; }
+      #hud { position: fixed; top: 12px; left: 12px; padding: 10px 14px; background: rgba(255,255,255,0.82); border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.12); pointer-events: none; max-width: calc(100vw - 52px); }
+      #hud h1 { margin: 0 0 2px; font-size: 15px; }
+      #hud .keys { margin-top: 6px; color: #51606b; }
+      kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid #b8c2ca; border-radius: 3px; background: #fff; }
+      #status { position: fixed; bottom: 12px; left: 12px; }
+      #status.error { color: #a1271b; background: #fff; padding: 8px 12px; border-radius: 6px; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="viewport"></div>
+    <div id="hud">
+      <h1 data-name>System-A</h1>
+      <div data-stats></div>
+      <div class="keys">
+        <kbd>WASD</kbd>/drag pan · <kbd>wheel</kbd> zoom · <kbd>Q</kbd><kbd>E</kbd> rotate · <kbd>Ctrl</kbd>+<kbd>S</kbd> save
+      </div>
+    </div>
+    <div id="status"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

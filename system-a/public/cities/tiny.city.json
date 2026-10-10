@@ -1,0 +1,38 @@
+{
+  "format": "system-a/city",
+  "version": 1,
+  "meta": {
+    "name": "Tiny Crossroads",
+    "description": "Hand-written example: one junction on a slope, two lots, three buildings."
+  },
+  "terrain": {
+    "size": [200, 200],
+    "resolution": [3, 3],
+    "heights": { "encoding": "array", "data": [0, 2, 4, 2, 4, 6, 4, 6, 12] },
+    "waterLevel": -1
+  },
+  "roads": {
+    "nodes": [
+      { "id": "center", "p": [100, 100] },
+      { "id": "north", "p": [100, 10] },
+      { "id": "south", "p": [100, 190] },
+      { "id": "west", "p": [10, 100] },
+      { "id": "east", "p": [190, 100], "y": 7 }
+    ],
+    "edges": [
+      { "id": "main-n", "a": "center", "b": "north", "kind": "avenue" },
+      { "id": "main-s", "a": "center", "b": "south", "kind": "avenue" },
+      { "id": "side-w", "a": "center", "b": "west", "kind": "street" },
+      { "id": "side-e", "a": "center", "b": "east", "kind": "street", "via": [[150, 92]] }
+    ]
+  },
+  "parcels": [
+    { "id": "corner-shop", "polygon": [[20, 20], [88, 20], [88, 90], [20, 90]], "zone": "commercial" },
+    { "id": "green", "polygon": [[112, 112], [190, 112], [190, 190], [112, 190]], "zone": "park" }
+  ],
+  "buildings": [
+    { "id": "tower", "parcel": "corner-shop", "footprint": [[30, 30], [60, 30], [60, 60], [30, 60]], "floors": 12, "style": "glass-tower" },
+    { "id": "kiosk", "parcel": "corner-shop", "footprint": [[66, 66], [82, 66], [82, 82], [66, 82]], "floors": 1, "roof": "gable" },
+    { "id": "cabin", "footprint": [[30, 130], [44, 130], [44, 140], [30, 140]], "floors": 2, "roof": "hip", "style": "suburban-house" }
+  ]
+}
