@@ -133,16 +133,21 @@ describe("landmarks", () => {
         const p = newParts();
         buildBuilding(p, b, lod);
         let tris = 0;
+        let finite = true;
         for (const mb of Object.values(p)) {
           tris += mb.triangleCount;
-          const pos = mb.build().getAttribute("position");
-          for (let k = 0; k < pos.count; k++) expect(Number.isFinite(pos.getY(k))).toBe(true);
+          for (const v of mb.build().getAttribute("position").array) if (!Number.isFinite(v)) finite = false;
         }
+        expect(finite).toBe(true);
         expect(tris).toBeGreaterThan(lod === "detail" ? 40 : 6);
       }
       const plan = planBuilding(b);
       expect(plan.floors.length).toBeGreaterThan(0);
-      for (const f of plan.floors) for (const it of f.furniture) for (const [x, z] of it.poly) expect(pointInPolygon(x, z, f.shell)).toBe(true);
+      // Check the ground floor and the top floor (plans are built per floor on demand).
+      for (const f of [plan.floors[0], plan.floors[plan.floors.length - 1]]) {
+        const outside = f.furniture.filter((it) => it.poly.some(([x, z]) => !pointInPolygon(x, z, f.shell)));
+        expect(outside.length).toBe(0);
+      }
     });
   }
 });

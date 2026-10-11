@@ -322,7 +322,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
   }
   const sr = ls ? stairRect(ls) : null;
 
-  for (let f = 0; f < n; f++) {
+  const buildFloor = (f: number): FloorPlan => {
     const y = b.baseY + f * fh + 0.05;
     const ceiling = b.baseY + (f + 1) * fh - SLAB;
     const shell = shells[f];
@@ -330,8 +330,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
     if (quad && ls) stairWalls(fb, ls, f, n);
 
     if (!quad) {
-      plan.floors.push(fb.finish(f));
-      continue;
+      return fb.finish(f);
     }
     const { U, V } = quad;
 
@@ -349,8 +348,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
         f,
         b,
       );
-      plan.floors.push(fb.finish(f));
-      continue;
+      return fb.finish(f);
     }
 
     if (house) {
@@ -466,8 +464,16 @@ export function planBuilding(b: BuildingData): BuildingPlan {
         officeDesks(fb, quad, sr);
       }
     }
-    plan.floors.push(fb.finish(f));
+    return fb.finish(f);
+  };
+
+  // Floors are planned on first use: a 70-storey tower only plans the floors you visit.
+  const cache: FloorPlan[] = [];
+  const floors: FloorPlan[] = [];
+  for (let f = 0; f < n; f++) {
+    Object.defineProperty(floors, f, { enumerable: true, get: () => (cache[f] ??= buildFloor(f)) });
   }
+  plan.floors = floors;
   return plan;
 }
 
