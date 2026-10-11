@@ -71,3 +71,29 @@ describe("massing shapes", () => {
     expect(walls.size).toBeGreaterThan(25);
   });
 });
+
+import { facadeCatalog } from "../src/buildings/facades";
+import { newParts } from "../src/buildings/kit";
+import { buildBuilding } from "../src/buildings/styles";
+
+describe("facade systems", () => {
+  for (const name of facadeCatalog.names()) {
+    it(`${name} draws finite geometry with openings that fit their edges`, () => {
+      const style = name.startsWith("house") ? "suburban-house" : name.includes("brick") ? "brick-midrise" : "apartment";
+      const b = building(style, name.startsWith("house") ? 2 : 6, "box", name.startsWith("house") ? 14 : 30, name.startsWith("house") ? 10 : 20);
+      b.facade = name;
+      b.entrance = { x: 115, z: 100, tx: 1, tz: 0, width: 1.6, height: 2.4, y: 5 };
+      const p = newParts();
+      buildBuilding(p, b, "detail");
+      let tris = 0;
+      for (const mb of Object.values(p)) {
+        tris += mb.triangleCount;
+        const pos = mb.build().getAttribute("position");
+        for (let k = 0; k < pos.count; k++) expect(Number.isFinite(pos.getY(k))).toBe(true);
+      }
+      expect(tris).toBeGreaterThan(50);
+      const look = lookOf(b);
+      expect(look.facadeName).toBe(name);
+    });
+  }
+});

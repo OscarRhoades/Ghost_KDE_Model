@@ -86,11 +86,13 @@ export function lookOf(b: BuildingData): Look {
     if (!b.facade) facadeName = pitched ? "house-pitched" : "house-render";
   }
   const facade = facadeCatalog.require(facadeName);
+  const pal = recipe.palette(rng, b);
+  facade.palette?.(pal, lookRng(b, 0x9a1e));
   const look: Look = {
     facadeName,
     facade,
     params: facade.params(lookRng(b, 0xfacade)),
-    pal: recipe.palette(rng, b),
+    pal,
     roof,
     lowerRoof: recipe.lowerRoof,
   };
@@ -176,7 +178,7 @@ const towerPalette = (rng: Rng): Palette => {
 };
 
 registerRecipe("glass-tower", {
-  facades: [["curtain-wall", 1], ["curtain-fins", 1]],
+  facades: [["curtain-wall", 1], ["curtain-fins", 1], ["unitised-grid", 1], ["horizontal-louvres", 0.5], ["concrete-grid", 0.4], ["perforated-screen", 0.25]],
   roofs: [["crown", 3], ["plant", 1]],
   lowerRoof: "terrace",
   palette: towerPalette,
@@ -188,7 +190,16 @@ const officePalette = (rng: Rng): Palette => {
 };
 
 registerRecipe("office", {
-  facades: [["ribbon", 2], ["curtain-wall", 0.6]],
+  facades: [
+    ["ribbon", 1.5],
+    ["curtain-wall", 0.5],
+    ["unitised-grid", 0.8],
+    ["concrete-grid", 1],
+    ["horizontal-louvres", 0.8],
+    ["perforated-screen", 0.6],
+    ["terracotta-baguettes", 0.8],
+    ["metal-mesh", 0.4],
+  ],
   roofs: [["plant", 2], ["pavilion", 1], ["green", 1]],
   lowerRoof: "terrace",
   palette: officePalette,
@@ -201,7 +212,15 @@ registerRecipe("default", {
 });
 
 registerRecipe("apartment", {
-  facades: [["punched-render", 1]],
+  facades: [
+    ["punched-render", 1],
+    ["deep-reveal-render", 1],
+    ["fibre-cement", 1],
+    ["loggias", 0.9],
+    ["wraparound-balconies", 0.6],
+    ["winter-gardens", 0.7],
+    ["timber-cladding", 0.7],
+  ],
   roofs: [["parapet", 2], ["green", 1.2], ["pavilion", 0.6], ["terrace", 0.6]],
   lowerRoof: "terrace",
   palette(rng) {
@@ -212,7 +231,7 @@ registerRecipe("apartment", {
 });
 
 registerRecipe("brick-midrise", {
-  facades: [["punched-brick", 1]],
+  facades: [["punched-brick", 1], ["flemish-brick", 1], ["recessed-brick", 1], ["loggias", 0.4]],
   roofs: [["parapet", 2], ["green", 1]],
   lowerRoof: "terrace",
   palette(rng) {

@@ -16,7 +16,8 @@ import { buildBuilding } from "./styles";
 /** Tile edge length in meters. */
 export const TILE = 320;
 /** Time per frame (ms) spent building detail tiles. */
-const BUILD_BUDGET_MS = 12;
+const BUILD_BUDGET_MS =
+  typeof location !== "undefined" && new URLSearchParams(location.search).has("eager") ? Infinity : 12; // ?eager: build all at once (screenshots)
 /** Detail is dropped once a tile is this much farther than the wanted radius. */
 const HYSTERESIS = 1.3;
 
