@@ -3,7 +3,7 @@
  * that faces the nearest street. Derived on load, never saved.
  */
 import { edgesOf } from "../buildings/kit";
-import { shellOf } from "../buildings/shape";
+import { shellOf } from "../buildings/massing";
 import { Building, RoadEdge, type BuildingData, type Entrance } from "../engine/components";
 import { LoadOrder, type Plugin } from "../engine/engine";
 import { segmentDistance } from "../geom/polygon";

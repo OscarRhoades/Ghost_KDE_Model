@@ -10,9 +10,9 @@
  * climbs the second half back to the open end, which is the next floor.
  */
 import { rngFor } from "../buildings/kit";
-import { houseUpper, interiorFloorHeight, interiorFloors, longFirst, shellOf } from "../buildings/shape";
+import { interiorFloorHeight, interiorFloors, longFirst, shellOf } from "../buildings/massing";
 import type { BuildingData } from "../engine/components";
-import { pointInPolygon, quadPoint, type P2 } from "../geom/polygon";
+import { clipSegment, pointInPolygon, quadPoint, type P2 } from "../geom/polygon";
 
 export type RoomKind = "lobby" | "shop" | "office" | "living" | "kitchen" | "bedroom" | "hall" | "warehouse";
 
@@ -91,6 +91,28 @@ class Frame {
   rect(x0: number, y0: number, x1: number, y1: number): P2[] {
     return [this.w(x0, y0), this.w(x1, y0), this.w(x1, y1), this.w(x0, y1)];
   }
+  /** Approximate local (x, y) meters of a world point (exact for parallelograms). */
+  local(p: P2): [number, number] {
+    const [q0, q1, , q3] = this.q;
+    const ax = (q1[0] - q0[0]) / this.U;
+    const az = (q1[1] - q0[1]) / this.U;
+    const bx = (q3[0] - q0[0]) / this.V;
+    const bz = (q3[1] - q0[1]) / this.V;
+    const px = p[0] - q0[0];
+    const pz = p[1] - q0[1];
+    const det = ax * bz - az * bx || 1;
+    return [(px * bz - pz * bx) / det, (ax * pz - az * px) / det];
+  }
+  /** Local bounding box of a world polygon. */
+  bounds(poly: readonly P2[]) {
+    const pts = poly.map((p) => this.local(p));
+    return {
+      x0: Math.min(...pts.map((p) => p[0])),
+      y0: Math.min(...pts.map((p) => p[1])),
+      x1: Math.max(...pts.map((p) => p[0])),
+      y1: Math.max(...pts.map((p) => p[1])),
+    };
+  }
 }
 
 interface LocalStair {
@@ -130,15 +152,22 @@ class FloorBuilder {
     if (len < 0.2) return;
     const at = (t: number): P2 => this.f.w(x0 + ((x1 - x0) * t) / len, y0 + ((y1 - y0) * t) / len);
     const top = height === undefined ? this.ceiling : this.y + height;
+    // Keep only what lies inside this floor's outline (L and U plans, setbacks).
+    const push = (a: P2, b: P2, y0: number) => {
+      for (const [t0, t1] of clipSegment(a[0], a[1], b[0], b[1], this.shell)) {
+        const p = (t: number): P2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        if ((t1 - t0) * Math.hypot(b[0] - a[0], b[1] - a[1]) > 0.1) this.walls.push({ a: p(t0), b: p(t1), y0, y1: top });
+      }
+    };
     let cursor = 0;
     for (const d of [...doors].sort((a, b) => a - b)) {
       const s0 = Math.max(0, d - DOOR_W / 2);
       const s1 = Math.min(len, d + DOOR_W / 2);
-      if (s0 > cursor) this.walls.push({ a: at(cursor), b: at(s0), y0: this.y, y1: top });
-      if (top > this.y + DOOR_H) this.walls.push({ a: at(s0), b: at(s1), y0: this.y + DOOR_H, y1: top });
+      if (s0 > cursor) push(at(cursor), at(s0), this.y);
+      if (top > this.y + DOOR_H) push(at(s0), at(s1), this.y + DOOR_H);
       cursor = s1;
     }
-    if (cursor < len) this.walls.push({ a: at(cursor), b: at(len), y0: this.y, y1: top });
+    if (cursor < len) push(at(cursor), at(len), this.y);
   }
 
   room(x0: number, y0: number, x1: number, y1: number, kind: RoomKind) {
@@ -225,7 +254,11 @@ export function planBuilding(b: BuildingData): BuildingPlan {
   const rng = rngFor(b.seed ^ 0x1a7e);
   const n = interiorFloors(b);
   const fh = interiorFloorHeight(b);
-  const quad = b.footprint.length === 4 ? new Frame(longFirst(b.footprint)) : null;
+  // Frame on the ground floor's outline when it is a quad (e.g. a courtyard's front
+  // bar), otherwise on the lot footprint.
+  const shell0 = shellOf(b, 0);
+  const quad = shell0.length === 4 ? new Frame(longFirst(shell0)) : b.footprint.length === 4 ? new Frame(longFirst(b.footprint)) : null;
+  const shells = Array.from({ length: n }, (_, f) => (f === 0 ? shell0 : shellOf(b, f)));
   const house = b.style === "suburban-house";
   const residential = house || b.style === "apartment" || b.style === "brick-midrise";
   const plan: BuildingPlan = {
@@ -242,18 +275,31 @@ export function planBuilding(b: BuildingData): BuildingPlan {
   let ls: LocalStair | null = null;
   if (quad && n >= 2) {
     const { U, V } = quad;
+    // Candidate positions, best first; the first that fits inside every floor wins.
+    const candidates: LocalStair[] = [];
     if (house) {
-      const up = houseUpper(b);
-      const xs = Math.max(0.4, (up ? up.u0 * U : 0) + 0.4);
+      const up = quad.bounds(shells[1]);
+      const xs = Math.max(0.4, up.x0 + 0.4);
       const run = 3.6;
-      if (xs + run + 1.5 < U && V > 5) ls = { ox: xs + run, oy: V - 0.3 - 2.0, rx: -1, ry: 0, ax: 0, ay: 1, run, width: 2.0 };
+      const oy = Math.min(V, up.y1) - 0.3 - 2.0;
+      candidates.push({ ox: xs + run, oy, rx: -1, ry: 0, ax: 0, ay: 1, run, width: 2.0 });
+      candidates.push({ ox: Math.min(U, up.x1) - 0.4, oy, rx: -1, ry: 0, ax: 0, ay: 1, run, width: 2.0 });
     } else if (b.style === "apartment" || b.style === "brick-midrise") {
       const run = Math.min(5.2, V / 2 - 0.9 - 0.6);
-      if (run >= 3 && U > 8) ls = { ox: U / 2 - 1.4, oy: V / 2 + 0.9, rx: 0, ry: 1, ax: 1, ay: 0, run, width: 2.8 };
+      if (run >= 3 && U > 8) for (const fx of [0.5, 0.3, 0.7, 0.15, 0.85]) candidates.push({ ox: U * fx - 1.4, oy: V / 2 + 0.9, rx: 0, ry: 1, ax: 1, ay: 0, run, width: 2.8 });
     } else if (U > 8 && V > 8) {
       const run = Math.min(5.2, V - 5);
-      ls = { ox: U / 2 - 1.4, oy: V / 2 - run / 2, rx: 0, ry: 1, ax: 1, ay: 0, run, width: 2.8 };
+      for (const [fx, fy] of [[0.5, 0.5], [0.35, 0.5], [0.65, 0.5], [0.5, 0.35], [0.5, 0.65], [0.25, 0.3], [0.75, 0.3]]) {
+        candidates.push({ ox: U * fx - 1.4, oy: V * fy - run / 2, rx: 0, ry: 1, ax: 1, ay: 0, run, width: 2.8 });
+      }
     }
+    const fits = (c: LocalStair) => {
+      const P = (r: number, w: number) => quad.w(c.ox + c.rx * r * c.run + c.ax * w * c.width, c.oy + c.ry * r * c.run + c.ay * w * c.width);
+      // The stair plus a landing in front of its open end must be indoors on every floor.
+      const pts = [P(-0.3, 0.02), P(1.02, 0.02), P(1.02, 0.98), P(-0.3, 0.98)];
+      return shells.every((sh) => pts.every(([x, z]) => pointInPolygon(x, z, sh)));
+    };
+    ls = candidates.find(fits) ?? null;
   }
   if (quad && ls) {
     const o = quad.w(ls.ox, ls.oy);
@@ -266,7 +312,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
   for (let f = 0; f < n; f++) {
     const y = b.baseY + f * fh + 0.05;
     const ceiling = b.baseY + (f + 1) * fh - SLAB;
-    const shell = shellOf(b, f);
+    const shell = shells[f];
     const fb = new FloorBuilder(quad ?? new Frame([shell[0], shell[1], shell[2], shell[shell.length - 1]]), y, ceiling, shell);
     if (quad && ls) stairWalls(fb, ls, f, n);
 
@@ -277,10 +323,10 @@ export function planBuilding(b: BuildingData): BuildingPlan {
     const { U, V } = quad;
 
     if (house) {
-      const up = f >= 1 ? houseUpper(b) : null;
-      const x0 = up ? Math.max(0, up.u0 * U) : 0;
-      const x1 = up ? Math.min(U * 1.2, up.u1 * U) : U;
-      const y0 = up ? up.v0 * V : 0;
+      const up = f >= 1 ? quad.bounds(shell) : null;
+      const x0 = up ? up.x0 : 0;
+      const x1 = up ? up.x1 : U;
+      const y0 = up ? Math.max(0, up.y0) : 0;
       const xp = ls ? ls.ox + 1.4 : U * 0.4;
       if (f === 0) {
         if (U - xp > 3.5) {

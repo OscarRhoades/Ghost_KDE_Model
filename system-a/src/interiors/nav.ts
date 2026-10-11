@@ -4,7 +4,7 @@
  * water and the map edge.
  */
 import { edgesOf, doorOn } from "../buildings/kit";
-import { shellOf } from "../buildings/shape";
+import { groundPlans } from "../buildings/massing";
 import { defineResource, type World } from "../ecs/world";
 import { Building, TerrainR, type BuildingData } from "../engine/components";
 import type { Plugin } from "../engine/engine";
@@ -70,9 +70,12 @@ export function createNavigator(world: World): Navigator {
   const doors = new SegmentGrid(32);
   for (const e of world.query(Building)) {
     const b = world.read(e, Building);
-    footprints.add(b.footprint);
-    owners.set(b.footprint, b);
-    for (const s of edgeSegments(shellOf(b, 0), b, b.entrance)) outer.add(s);
+    // Every volume standing on the ground is solid; the front door opens one of them.
+    for (const plan of groundPlans(b)) {
+      footprints.add(plan);
+      owners.set(plan, b);
+      for (const s of edgeSegments(plan, b, b.entrance)) outer.add(s);
+    }
     if (b.entrance) doors.add({ ax: b.entrance.x, az: b.entrance.z, bx: b.entrance.x, bz: b.entrance.z, owner: b });
   }
 

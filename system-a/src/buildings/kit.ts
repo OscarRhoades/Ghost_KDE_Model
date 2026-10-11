@@ -32,8 +32,9 @@ export interface Edge {
 
 /** Edges of a polygon with outward normals, in a consistent (clockwise in x/z) order. */
 export function edgesOf(poly: readonly P2[]): Edge[] {
+  // Clockwise in x/z, so the outside is always to the left of each edge;
+  // this holds for concave plans (L, U) where a centroid test would not.
   const fp = signedArea(poly) > 0 ? [...poly].reverse() : [...poly];
-  const [cx, cz] = centroid(fp);
   const out: Edge[] = [];
   for (let k = 0; k < fp.length; k++) {
     const a = fp[k];
@@ -42,15 +43,7 @@ export function edgesOf(poly: readonly P2[]): Edge[] {
     if (len < 0.05) continue;
     const tx = (b[0] - a[0]) / len;
     const tz = (b[1] - a[1]) / len;
-    let nx = -tz;
-    let nz = tx;
-    const mx = (a[0] + b[0]) / 2 - cx;
-    const mz = (a[1] + b[1]) / 2 - cz;
-    if (mx * nx + mz * nz < 0) {
-      nx = -nx;
-      nz = -nz;
-    }
-    out.push({ a, b, len, tx, tz, nx, nz });
+    out.push({ a, b, len, tx, tz, nx: -tz, nz: tx });
   }
   return out;
 }

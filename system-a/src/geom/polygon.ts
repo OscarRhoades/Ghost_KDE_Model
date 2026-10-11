@@ -138,3 +138,44 @@ export function quadPoint(q: readonly P2[], u: number, v: number): [number, numb
   const z = (1 - u) * (1 - v) * p00[1] + u * (1 - v) * p10[1] + u * v * p11[1] + (1 - u) * v * p01[1];
   return [x, z];
 }
+
+/** Polygon rotated by `angle` radians about (cx, cz). */
+export function rotated(poly: readonly P2[], angle: number, cx: number, cz: number): [number, number][] {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return poly.map(([x, z]) => [cx + (x - cx) * c - (z - cz) * s, cz + (x - cx) * s + (z - cz) * c]);
+}
+
+/**
+ * The parts of segment a-b that lie inside `poly` (any simple polygon), as
+ * parameter ranges [t0, t1] along the segment.
+ */
+export function clipSegment(ax: number, az: number, bx: number, bz: number, poly: readonly P2[]): [number, number][] {
+  const ts = [0, 1];
+  const dx = bx - ax;
+  const dz = bz - az;
+  for (let i = 0, n = poly.length; i < n; i++) {
+    const [px, pz] = poly[i];
+    const [qx, qz] = poly[(i + 1) % n];
+    const ex = qx - px;
+    const ez = qz - pz;
+    const den = dx * ez - dz * ex;
+    if (Math.abs(den) < 1e-12) continue;
+    const t = ((px - ax) * ez - (pz - az) * ex) / den;
+    const u = ((px - ax) * dz - (pz - az) * dx) / den;
+    if (t > 0 && t < 1 && u >= 0 && u <= 1) ts.push(t);
+  }
+  ts.sort((a, b) => a - b);
+  const out: [number, number][] = [];
+  for (let k = 0; k + 1 < ts.length; k++) {
+    const t0 = ts[k];
+    const t1 = ts[k + 1];
+    if (t1 - t0 < 1e-6) continue;
+    const tm = (t0 + t1) / 2;
+    if (!pointInPolygon(ax + dx * tm, az + dz * tm, poly)) continue;
+    const last = out[out.length - 1];
+    if (last && Math.abs(last[1] - t0) < 1e-6) last[1] = t1;
+    else out.push([t0, t1]);
+  }
+  return out;
+}

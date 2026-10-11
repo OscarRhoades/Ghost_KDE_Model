@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shellOf } from "../src/buildings/shape";
+import { shellOf } from "../src/buildings/massing";
 import { Building, type BuildingData } from "../src/engine/components";
 import { coreDataPlugins } from "../src/engine/dataPlugins";
 import { Engine } from "../src/engine/engine";
