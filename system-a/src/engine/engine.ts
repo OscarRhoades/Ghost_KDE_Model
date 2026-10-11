@@ -29,6 +29,8 @@ export const LoadOrder = {
   props: 35,
   /** Derived data that needs roads and buildings (front doors). */
   frontage: 40,
+  /** Street dressing, after roads, buildings and front doors. */
+  streetscape: 50,
   /** Runs after every data section is in the world. */
   conform: 100,
 } as const;

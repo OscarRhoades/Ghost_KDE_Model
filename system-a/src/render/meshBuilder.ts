@@ -41,6 +41,27 @@ export class MeshBuilder {
     this.triFacing(a, c, d, facing, color);
   }
 
+  /**
+   * Append triangles given as flat position/color arrays, rotated about Y by
+   * `rot`, scaled, then translated. Used to stamp prop templates into a tile.
+   */
+  appendTransformed(pos: ArrayLike<number>, col: ArrayLike<number>, rot: number, scale: number, tx: number, ty: number, tz: number): void {
+    const c = Math.cos(rot) * scale;
+    const s = Math.sin(rot) * scale;
+    for (let k = 0; k < pos.length; k += 3) {
+      const x = pos[k];
+      const y = pos[k + 1];
+      const z = pos[k + 2];
+      this.pos.push(tx + x * c + z * s, ty + y * scale, tz - x * s + z * c);
+    }
+    for (let k = 0; k < col.length; k++) this.col.push(col[k]);
+  }
+
+  /** Raw triangle data (positions and colors, 9 numbers per triangle each). */
+  raw(): { pos: number[]; col: number[] } {
+    return { pos: this.pos, col: this.col };
+  }
+
   build(): BufferGeometry {
     const g = new BufferGeometry();
     g.setAttribute("position", new Float32BufferAttribute(this.pos, 3));

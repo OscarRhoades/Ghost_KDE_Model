@@ -6,11 +6,14 @@
 import { edgesOf, doorOn } from "../buildings/kit";
 import { groundPlans } from "../buildings/massing";
 import { defineResource, type World } from "../ecs/world";
-import { Building, TerrainR, type BuildingData } from "../engine/components";
+import { Building, Prop, TerrainR, type BuildingData, type PropData } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { pointInPolygon, type P2 } from "../geom/polygon";
 import { FootprintGrid } from "../physics/collision";
 import { pushOut, SegmentGrid, type Segment } from "../physics/walls";
+import { templateFor } from "../props/catalog";
+import { propShown } from "../props/propView";
+import { QualityR } from "../render/quality";
 import { onStair, planBuilding, stairCoords, stairHeight, type BuildingPlan } from "./plan";
 
 export interface WalkPose {
@@ -40,6 +43,26 @@ export const WalkerR = defineResource<WalkPose>("Walker");
 /** Longest single collision step, so fast walkers can't tunnel through walls. */
 const SUBSTEP = 0.2;
 const PLAN_CACHE = 16;
+
+/** Outline segments of a solid prop (a box, or an octagon for round ones). */
+export function propSegments(p: PropData): Segment[] {
+  const solid = templateFor(p.kind)?.def.solid;
+  if (!solid) return [];
+  const pts: [number, number][] = [];
+  if (solid.r !== undefined) {
+    for (let k = 0; k < 8; k++) pts.push([Math.cos((k / 8) * Math.PI * 2) * solid.r, Math.sin((k / 8) * Math.PI * 2) * solid.r]);
+  } else {
+    const hx = solid.hx ?? 0.2, hz = solid.hz ?? 0.2;
+    pts.push([-hx, -hz], [hx, -hz], [hx, hz], [-hx, hz]);
+  }
+  // Same rotation as the prop's mesh: local +z turns toward (sin rot, cos rot).
+  const c = Math.cos(p.rot) * p.scale, s = Math.sin(p.rot) * p.scale;
+  const w = pts.map(([x, z]): [number, number] => [p.x + x * c + z * s, p.z - x * s + z * c]);
+  return w.map((a, k) => {
+    const b = w[(k + 1) % w.length];
+    return { ax: a[0], az: a[1], bx: b[0], bz: b[1], owner: p };
+  });
+}
 
 function edgeSegments(poly: readonly P2[], owner: unknown, door?: BuildingData["entrance"]): Segment[] {
   const out: Segment[] = [];
@@ -78,6 +101,9 @@ export function createNavigator(world: World): Navigator {
     }
     if (b.entrance) doors.add({ ax: b.entrance.x, az: b.entrance.z, bx: b.entrance.x, bz: b.entrance.z, owner: b });
   }
+
+  const props = new SegmentGrid();
+  for (const e of world.query(Prop)) for (const seg of propSegments(world.read(e, Prop))) props.add(seg);
 
   const plans = new Map<BuildingData, BuildingPlan>();
   const plan = (b: BuildingData) => {
@@ -147,6 +173,11 @@ export function createNavigator(world: World): Navigator {
       let segs = outer.near(nx, nz, radius + 1);
       if (inside && pose.floor > 0) segs = segs.filter((s) => s.owner !== inside);
       if (inside) segs = segs.concat(interiorWalls(inside, pose.floor));
+      else {
+        // Only the props on screen block the way.
+        const density = world.getResource(QualityR)?.propDensity ?? 1;
+        segs = segs.concat(props.near(nx, nz, radius + 1).filter((s) => propShown(s.owner as PropData, density)));
+      }
       [nx, nz] = pushOut(nx, nz, radius, segs);
       const outdoors = !(inside && pose.floor > 0) && !buildingAt(nx, nz);
       if (outdoors) {

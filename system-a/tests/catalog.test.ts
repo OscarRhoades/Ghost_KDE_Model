@@ -49,7 +49,9 @@ describe("city file catalog fields", () => {
     for (const p of coreDataPlugins()) engine.use(p);
     const city = parseCity(JSON.parse(readFileSync("public/cities/tiny.city.json", "utf8")));
     engine.load(city);
-    expect(engine.world.count(Prop)).toBe(4);
+    const all = [...engine.world.query(Prop)].map((e) => engine.world.read(e, Prop));
+    expect(all.filter((p) => !p.derived).length).toBe(4);
+    expect(all.filter((p) => p.derived).length).toBeGreaterThan(0);
     expect(engine.save()).toEqual(city);
     expect(engine.save().buildings[0].shape).toBe("podium-tower");
   });

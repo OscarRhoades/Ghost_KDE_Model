@@ -12,6 +12,8 @@ const C = {
   sidewalk: new Color("#cdc8bf"),
   curb: new Color("#a9a49b"),
   marking: new Color("#f2efe6"),
+  centre: new Color("#e8c45a"),
+  bike: new Color("#6f8f6a"),
 };
 
 /** Heights above the graded terrain, in meters. */
@@ -54,7 +56,34 @@ export function roadView(): Plugin {
               curb(mb, inner, half);
               curb(mb, inner, -half);
             }
-            if (inner && (r.kind === "street" || r.kind === "avenue")) dashes(mb, inner);
+            if (r.kind === "street" || r.kind === "avenue") {
+              const L = length(path);
+              // Crossings and stop lines just outside each junction.
+              for (const [atA, n] of [[true, r.a], [false, r.b]] as const) {
+                if ((degree.get(n) ?? 0) < 3) continue;
+                const j = junction.get(n) ?? 0;
+                const from = (d: number) => (atA ? d : L - d);
+                const zebra = section(path, from(j + 0.4), from(j + 2.8));
+                if (zebra) for (let o = -half + 0.5; o + 0.5 <= half - 0.3; o += 1.1) ribbon(mb, zebra, o, o + 0.55, MARK_Y, C.marking);
+                const stop = section(path, from(j + 3.4), from(j + 3.75));
+                // Traffic drives on the right: the stop line spans the approaching half.
+                if (stop) ribbon(mb, stop, atA ? 0 : -half + 0.3, atA ? half - 0.3 : 0, MARK_Y, C.marking);
+              }
+              const lined = trim(path, (degree.get(r.a) ?? 0) > 2 ? (junction.get(r.a) ?? 0) + 4 : 0, (degree.get(r.b) ?? 0) > 2 ? (junction.get(r.b) ?? 0) + 4 : 0);
+              if (lined && r.kind === "avenue") {
+                // Double centre line, dashed lane dividers, bike lanes at the curb.
+                ribbon(mb, lined, -0.25, -0.1, MARK_Y, C.centre);
+                ribbon(mb, lined, 0.1, 0.25, MARK_Y, C.centre);
+                const bike = Math.min(1.8, half * 0.25);
+                const lane = (half - bike) / 2;
+                dashes(mb, lined, lane);
+                dashes(mb, lined, -lane);
+                for (const sgn of [1, -1]) {
+                  ribbon(mb, lined, sgn > 0 ? half - bike : -half, sgn > 0 ? half : -half + bike, MARK_Y - 0.005, C.bike);
+                  ribbon(mb, lined, sgn * (half - bike) - 0.08, sgn * (half - bike) + 0.08, MARK_Y, C.marking);
+                }
+              } else if (lined) dashes(mb, lined, 0);
+            }
           }
 
           for (const [n, radius] of junction) {
@@ -125,14 +154,28 @@ function curb(mb: MeshBuilder, path: P3[], offset: number) {
   }
 }
 
-/** Dashed centerline: 3 m dashes every 9 m. */
-function dashes(mb: MeshBuilder, path: P3[]) {
+function length(path: P3[]): number {
+  let L = 0;
+  for (let k = 1; k < path.length; k++) L += Math.hypot(path[k][0] - path[k - 1][0], path[k][2] - path[k - 1][2]);
+  return L;
+}
+
+/** The part of a path between distances d0 and d1 (either order) from its start. */
+function section(path: P3[], d0: number, d1: number): P3[] | null {
+  const a = Math.min(d0, d1), b = Math.max(d0, d1);
+  const L = length(path);
+  if (a < 0 || b > L) return null;
+  return trim(path, a, L - b);
+}
+
+/** Dashed line at `offset`: 3 m dashes every 9 m. */
+function dashes(mb: MeshBuilder, path: P3[], offset = 0) {
   const fine = densify(path, 1.5);
   let dist = 0;
   for (let k = 1; k < fine.length; k++) {
     const p = fine[k - 1], q = fine[k];
     const seg = Math.hypot(q[0] - p[0], q[2] - p[2]);
-    if (dist % 9 < 3) ribbon(mb, [p, q], -0.08, 0.08, MARK_Y, C.marking);
+    if (dist % 9 < 3) ribbon(mb, [p, q], offset - 0.08, offset + 0.08, MARK_Y, C.marking);
     dist += seg;
   }
 }

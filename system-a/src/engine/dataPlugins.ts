@@ -25,6 +25,7 @@ import {
 } from "./components";
 import { LoadOrder, type Engine, type Plugin } from "./engine";
 import { frontage } from "../interiors/frontage";
+import { streetscape } from "../props/streetscape";
 
 /** Blend distances (meters) from flattened ground back to natural terrain. */
 const PAD_BLEND = 10;
@@ -247,7 +248,7 @@ export function propsData(): Plugin {
           });
         },
         save(world, out) {
-          const items = [...world.query(Prop)].sort((a, b) => world.read(a, PropOrder) - world.read(b, PropOrder));
+          const items = [...world.query(Prop, PropOrder)].sort((a, b) => world.read(a, PropOrder) - world.read(b, PropOrder));
           for (const e of items) {
             const p = world.read(e, Prop);
             const id = world.get(e, SourceId);
@@ -330,5 +331,5 @@ function markPolygon(hf: Heightfield, poly: readonly P2[], surface: Uint8Array, 
 
 /** Every core data plugin, in dependency order. */
 export function coreDataPlugins(): Plugin[] {
-  return [terrainData(), roadsData(), parcelsData(), buildingsData(), propsData(), frontage(), terrainConform()];
+  return [terrainData(), roadsData(), parcelsData(), buildingsData(), propsData(), frontage(), streetscape(), terrainConform()];
 }

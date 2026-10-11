@@ -4,11 +4,12 @@
  * built a few at a time and dropped again when the view moves away, so memory
  * and triangle counts stay bounded on large cities and phones.
  */
-import { Group, Mesh, MeshStandardMaterial, type Material } from "three";
+import { Group, Mesh, type Material } from "three";
 import type { World } from "../ecs/world";
 import { Building, FocusR, type BuildingData } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { centroid } from "../geom/polygon";
+import { partMaterials } from "../render/materials";
 import { addToScene, SceneR } from "../render/renderPlugin";
 import { newParts, type Parts, type Slot } from "./kit";
 import { buildBuilding } from "./index";
@@ -31,16 +32,7 @@ interface Tile {
   pending: { parts: Parts; next: number } | null;
 }
 
-function makeMaterials(): Record<Slot, Material> {
-  return {
-    matte: new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 }),
-    glass: new MeshStandardMaterial({ vertexColors: true, roughness: 0.08, metalness: 0.7, envMapIntensity: 1.8 }),
-    metal: new MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.55, envMapIntensity: 1.2 }),
-    glow: new MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }),
-  };
-}
-
-function toGroup(parts: Parts, materials: Record<Slot, Material>, name: string): Group {
+export function toGroup(parts: Parts, materials: Record<Slot, Material>, name: string): Group {
   const g = new Group();
   g.name = name;
   for (const slot of Object.keys(parts) as Slot[]) {
@@ -55,7 +47,7 @@ function toGroup(parts: Parts, materials: Record<Slot, Material>, name: string):
   return g;
 }
 
-function disposeGroup(g: Group) {
+export function disposeGroup(g: Group) {
   g.traverse((o) => (o as Mesh).geometry?.dispose());
   g.removeFromParent();
 }
@@ -83,10 +75,8 @@ export function buildingView(): Plugin {
 
       engine.addSystem({
         name: "building-view",
-        start() {
-          materials = makeMaterials();
-        },
         onLoad(world) {
+          materials = partMaterials(world);
           tiles = [];
           for (const [key, buildings] of tileBuildings(world)) {
             const [i, j] = key.split(",").map(Number);

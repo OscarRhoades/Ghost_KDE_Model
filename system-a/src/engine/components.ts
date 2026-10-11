@@ -70,6 +70,12 @@ export interface PropData {
   rot: number;
   scale: number;
   explicit: { rot?: number; scale?: number };
+  /** Placed by the engine (street dressing), not the file; never saved. */
+  derived?: boolean;
+  /** Height above the ground it stands on (e.g. sidewalk curb). */
+  lift?: number;
+  /** Optional prop: dropped first on lower quality tiers. */
+  optional?: boolean;
 }
 export const Prop = defineComponent<PropData>("Prop");
 

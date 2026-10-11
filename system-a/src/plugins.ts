@@ -8,6 +8,7 @@ import { navigation } from "./interiors/nav";
 import { coreDataPlugins } from "./engine/dataPlugins";
 import type { Plugin } from "./engine/engine";
 import { renderPlugin, type RenderOptions } from "./render/renderPlugin";
+import { propView } from "./props/propView";
 import { roadView } from "./roads/roadView";
 import { terrainView } from "./terrain/terrainView";
 
@@ -26,6 +27,7 @@ export function viewerPlugins(opts: ViewerOptions): Plugin[] {
     terrainView(),
     roadView(),
     buildingView(),
+    propView(),
     isoCamera(opts.iso),
     walkCamera({ onStick: opts.onStick }),
     navigation(),
