@@ -10,6 +10,7 @@ import type { Plugin } from "./engine/engine";
 import { renderPlugin, type RenderOptions } from "./render/renderPlugin";
 import { patchView } from "./props/patchView";
 import { propView } from "./props/propView";
+import { weatherView } from "./render/weatherView";
 import { roadView } from "./roads/roadView";
 import { terrainView } from "./terrain/terrainView";
 
@@ -34,5 +35,6 @@ export function viewerPlugins(opts: ViewerOptions): Plugin[] {
     walkCamera({ onStick: opts.onStick }),
     navigation(),
     interiorView(),
+    weatherView(),
   ];
 }

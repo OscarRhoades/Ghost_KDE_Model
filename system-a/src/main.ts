@@ -6,6 +6,7 @@ import { Building, FocusR, Parcel, RoadEdge } from "./engine/components";
 import { Engine } from "./engine/engine";
 import { parseCity } from "./format/schema";
 import { QualityR, saveTier, settingsFor, TIERS } from "./render/quality";
+import { AtmosR, TIMES, WEATHERS } from "./render/atmosphere";
 import { coreDataPlugins, viewerPlugins } from "./plugins";
 
 const hud = document.getElementById("hud")!;
@@ -47,6 +48,31 @@ async function main() {
     engine.world.setResource(QualityR, settingsFor(next, q.version + 1));
     saveTier(next);
     showQuality();
+  });
+
+  // Time of day and weather buttons (also T and Shift+T, and ?time=…&weather=… in the URL).
+  const timeButton = document.getElementById("time") as HTMLButtonElement;
+  const weatherButton = document.getElementById("weather") as HTMLButtonElement;
+  const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+  const showAtmos = () => {
+    const a = engine.world.resource(AtmosR);
+    timeButton.textContent = cap(a.time);
+    weatherButton.textContent = cap(a.weather);
+  };
+  const cycle = (which: "time" | "weather") => {
+    const a = engine.world.resource(AtmosR);
+    const next =
+      which === "time"
+        ? { ...a, time: TIMES[(TIMES.indexOf(a.time) + 1) % TIMES.length] }
+        : { ...a, weather: WEATHERS[(WEATHERS.indexOf(a.weather) + 1) % WEATHERS.length] };
+    engine.world.setResource(AtmosR, { ...next, version: a.version + 1 });
+    showAtmos();
+  };
+  showAtmos();
+  timeButton.addEventListener("click", () => cycle("time"));
+  weatherButton.addEventListener("click", () => cycle("weather"));
+  window.addEventListener("keydown", (e) => {
+    if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.metaKey) cycle(e.shiftKey ? "weather" : "time");
   });
 
   const controls = engine.world.resource(IsoControlsR);

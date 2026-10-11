@@ -3,13 +3,13 @@
  * mesh per material per tile and streamed around the view like building
  * detail. Optional props are thinned on lower quality tiers.
  */
-import { Group } from "three";
+import { BufferGeometry, Float32BufferAttribute, Group, Mesh } from "three";
 import type { World } from "../ecs/world";
 import { FocusR, Prop, TerrainR, type PropData } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { disposeGroup, toGroup } from "../buildings/buildingView";
 import { newParts, type Slot } from "../buildings/kit";
-import { partMaterials } from "../render/materials";
+import { nightMaterials, partMaterials } from "../render/materials";
 import { QualityR } from "../render/quality";
 import { SceneR } from "../render/renderPlugin";
 import { templateFor } from "./catalog";
@@ -100,17 +100,40 @@ export function propView(): Plugin {
           for (const t of missing) {
             if (performance.now() - start > BUDGET_MS) break;
             const parts = newParts();
+            const pools: number[] = [];
+            const poolUv: number[] = [];
             for (const p of t.props) {
               if (!propShown(p, density)) continue;
               const tpl = templateFor(p.kind);
               if (!tpl) continue;
               const y = propY(world, p);
+              const light = tpl.def.light;
+              if (light) {
+                // Ground pool under the lamp head, turned with the prop.
+                const c = Math.cos(p.rot), sn = Math.sin(p.rot);
+                const cx = p.x + light.x * c + light.z * sn, cz = p.z - light.x * sn + light.z * c;
+                const r = light.r * p.scale, py = y + 0.03;
+                const q = [[cx - r, cz - r, 0, 0], [cx + r, cz - r, 1, 0], [cx + r, cz + r, 1, 1], [cx - r, cz + r, 0, 1]];
+                for (const k of [0, 2, 1, 0, 3, 2]) {
+                  pools.push(q[k][0], py, q[k][1]);
+                  poolUv.push(q[k][2], q[k][3]);
+                }
+              }
               for (const slot of Object.keys(tpl.parts) as Slot[]) {
                 const d = tpl.parts[slot]!;
                 parts[slot].appendTransformed(d.pos, d.col, p.rot, p.scale, p.x, y, p.z);
               }
             }
             t.group = toGroup(parts, materials, `props-${t.key}`);
+            if (pools.length) {
+              const g = new BufferGeometry();
+              g.setAttribute("position", new Float32BufferAttribute(pools, 3));
+              g.setAttribute("uv", new Float32BufferAttribute(poolUv, 2));
+              const mesh = new Mesh(g, nightMaterials(world).pool);
+              mesh.name = "lamp-pools";
+              mesh.renderOrder = 3;
+              t.group.add(mesh);
+            }
             scene.add(t.group);
           }
         },

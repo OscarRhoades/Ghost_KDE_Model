@@ -16,6 +16,9 @@ import { defineResource, type World } from "../ecs/world";
 import { FocusR, SceneObject } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { detectTier, QualityR, savedTier, settingsFor } from "./quality";
+import { atmosFor, atmosFromUrl, AtmosR, type Atmos } from "./atmosphere";
+import { applyNight } from "./materials";
+import { PostFx } from "./postfx";
 import { createSky, SKY, type Sky } from "./sky";
 
 export const SceneR = defineResource<Scene>("Scene");
@@ -24,6 +27,9 @@ export const RendererR = defineResource<WebGLRenderer>("Renderer");
 export const ActiveCameraR = defineResource<Camera>("ActiveCamera");
 export const SunR = defineResource<DirectionalLight>("Sun");
 export const SkyR = defineResource<Sky>("Sky");
+export const HemiR = defineResource<HemisphereLight>("Hemisphere");
+/** The atmosphere currently applied (sky, light, fog, night factor). */
+export const AtmosStateR = defineResource<Atmos>("AtmosState");
 
 export interface RenderOptions {
   container: HTMLElement;
@@ -45,6 +51,14 @@ export function renderPlugin(opts: RenderOptions): Plugin {
     name: "render",
     install(engine) {
       let appliedQuality = -1;
+      let appliedAtmos = -1;
+      let atmos = atmosFor("day", "clear");
+      let post: PostFx | null = null;
+      const fogBase = new WeakMap<Fog, [number, number]>();
+      const dropPost = () => {
+        post?.dispose();
+        post = null;
+      };
       engine.addSystem({
         name: "render",
         start(world) {
@@ -67,7 +81,10 @@ export function renderPlugin(opts: RenderOptions): Plugin {
           scene.environmentIntensity = 0.45;
           scene.add(sky.dome);
           scene.fog = new Fog(PALETTE.sky, 4000, 9000);
-          scene.add(new HemisphereLight(PALETTE.hemiSky, PALETTE.hemiGround, 1.1));
+          const hemi = new HemisphereLight(PALETTE.hemiSky, PALETTE.hemiGround, 1.1);
+          scene.add(hemi);
+          world.setResource(HemiR, hemi);
+          world.setResource(AtmosR, atmosFromUrl());
 
           const sun = new DirectionalLight(PALETTE.sun, 2.2);
           sun.castShadow = true;
@@ -84,6 +101,7 @@ export function renderPlugin(opts: RenderOptions): Plugin {
 
           const resize = () => {
             renderer.setSize(opts.container.clientWidth, opts.container.clientHeight);
+            post?.setSize(opts.container.clientWidth, opts.container.clientHeight);
           };
           resize();
           new ResizeObserver(resize).observe(opts.container);
@@ -114,6 +132,29 @@ export function renderPlugin(opts: RenderOptions): Plugin {
             sunLight.shadow.mapSize.setScalar(q.shadowMapSize);
             sunLight.shadow.map?.dispose();
             sunLight.shadow.map = null;
+            dropPost();
+          }
+          // Time of day and weather.
+          const settings = world.resource(AtmosR);
+          if (settings.version !== appliedAtmos) {
+            appliedAtmos = settings.version;
+            atmos = atmosFor(settings.time, settings.weather);
+            world.setResource(AtmosStateR, atmos);
+            const sky = world.resource(SkyR);
+            sky.repaint(atmos.sky);
+            const scene = world.resource(SceneR);
+            scene.environment = sky.environment;
+            scene.environmentIntensity = atmos.envIntensity;
+            const hemi = world.resource(HemiR);
+            hemi.color.copy(atmos.hemiSky);
+            hemi.groundColor.copy(atmos.hemiGround);
+            hemi.intensity = atmos.hemiIntensity;
+            const sunLight = world.resource(SunR);
+            sunLight.color.copy(atmos.sunColor);
+            sunLight.intensity = atmos.sunIntensity;
+            sunDir.copy(atmos.sunDir);
+            world.resource(RendererR).toneMappingExposure = atmos.exposure;
+            applyNight(world, atmos.night);
           }
           // Keep the shadow frustum fitted around what the camera is looking at.
           const focus = world.getResource(FocusR);
@@ -138,7 +179,27 @@ export function renderPlugin(opts: RenderOptions): Plugin {
           sky.dome.visible = perspective;
           if (perspective) sky.dome.position.copy(camera.position);
           scene.background = perspective ? SKY.horizon : sky.backdrop;
-          world.resource(RendererR).render(scene, camera);
+          // Fog follows the weather: each fog keeps its own clear-day distances.
+          const fog = scene.fog as Fog | null;
+          if (fog) {
+            let base = fogBase.get(fog);
+            if (!base) fogBase.set(fog, (base = [fog.near, fog.far]));
+            // The map camera stands far off, so the map gets a lighter haze.
+            const k = perspective ? atmos.fogScale : Math.max(0.6, atmos.fogScale);
+            fog.near = base[0] * k;
+            fog.far = base[1] * k;
+            fog.color.copy(atmos.fogColor);
+          }
+          const renderer = world.resource(RendererR);
+          if (q.postFx) {
+            if (post && post.camera !== camera) dropPost();
+            post ??= new PostFx(renderer, scene, camera);
+            post.setBloom(atmos.bloom, atmos.night);
+            post.render();
+          } else {
+            dropPost();
+            renderer.render(scene, camera);
+          }
         },
       });
     },

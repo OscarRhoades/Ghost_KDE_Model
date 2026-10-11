@@ -14,6 +14,8 @@ export interface PropDef {
   solid?: { r?: number; hx?: number; hz?: number };
   /** Lit at night (lamps, signs). */
   glows?: boolean;
+  /** A pool of light on the ground at night: center in the prop's frame and radius. */
+  light?: { x: number; z: number; r: number };
 }
 
 export const propCatalog = new Catalog<PropDef>("prop");
@@ -136,6 +138,7 @@ const TIMBER = hex("#a3734c");
 propCatalog.register("lamp", {
   solid: { r: 0.15 },
   glows: true,
+  light: { x: 0, z: 1.45, r: 8 },
   build(p) {
     cylinder(p.metal, 0, 0, 0.1, 0.07, 0, 7, STEEL);
     block(p.metal, -0.05, 6.9, 0, 0.05, 7.0, 1.4, STEEL);
@@ -147,6 +150,7 @@ propCatalog.register("lamp", {
 propCatalog.register("lamp-post", {
   solid: { r: 0.15 },
   glows: true,
+  light: { x: 0, z: 0, r: 5.5 },
   build(p) {
     cylinder(p.metal, 0, 0, 0.12, 0.06, 0, 4.2, STEEL);
     cylinder(p.glow, 0, 0, 0.22, 0.22, 4.2, 4.7, LIGHT);
@@ -377,11 +381,11 @@ function car(p: Parts, type: (typeof CAR_TYPES)[string], paint: Color) {
   for (const [x, z] of [[-hw + 0.02, -hl + 0.75], [hw - 0.02, -hl + 0.75], [-hw + 0.02, hl - 0.8], [hw - 0.02, hl - 0.8]]) {
     block(p.matte, x - 0.12, 0, z - 0.33, x + 0.12, 0.62, z + 0.33, TYRE);
   }
-  // Head and tail lights (+z is the front).
-  block(p.glow, -hw + 0.15, y1 - 0.25, hl, -hw + 0.5, y1 - 0.1, hl + 0.02, hex("#fff6dc"));
-  block(p.glow, hw - 0.5, y1 - 0.25, hl, hw - 0.15, y1 - 0.1, hl + 0.02, hex("#fff6dc"));
-  block(p.glow, -hw + 0.1, y1 - 0.22, -hl - 0.02, -hw + 0.45, y1 - 0.1, -hl, hex("#d0392f"));
-  block(p.glow, hw - 0.45, y1 - 0.22, -hl - 0.02, hw - 0.1, y1 - 0.1, -hl, hex("#d0392f"));
+  // Head and tail lights (+z is the front); parked, so not lit.
+  block(p.matte, -hw + 0.15, y1 - 0.25, hl, -hw + 0.5, y1 - 0.1, hl + 0.02, hex("#fff6dc"));
+  block(p.matte, hw - 0.5, y1 - 0.25, hl, hw - 0.15, y1 - 0.1, hl + 0.02, hex("#fff6dc"));
+  block(p.matte, -hw + 0.1, y1 - 0.22, -hl - 0.02, -hw + 0.45, y1 - 0.1, -hl, hex("#d0392f"));
+  block(p.matte, hw - 0.45, y1 - 0.22, -hl - 0.02, hw - 0.1, y1 - 0.1, -hl, hex("#d0392f"));
 }
 
 for (const [tname, type] of Object.entries(CAR_TYPES)) {

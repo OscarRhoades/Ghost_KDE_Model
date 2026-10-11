@@ -34,19 +34,37 @@ export function skyColor(y: number, out = new Color()): Color {
 
 function gradientSphere(radius: number): Mesh {
   const g = new SphereGeometry(radius, 48, 24);
-  const pos = g.getAttribute("position");
-  const colors = new Float32Array(pos.count * 3);
+  g.setAttribute("color", new BufferAttribute(new Float32Array(g.getAttribute("position").count * 3), 3));
+  const mesh = new Mesh(g, new MeshBasicMaterial({ vertexColors: true, side: BackSide, fog: false, depthWrite: false }));
+  recolor(mesh, radius);
+  return mesh;
+}
+
+/** Repaint a gradient sphere from the current SKY colors. */
+function recolor(mesh: Mesh, radius: number) {
+  const pos = mesh.geometry.getAttribute("position");
+  const col = mesh.geometry.getAttribute("color") as BufferAttribute;
   const c = new Color();
   for (let k = 0; k < pos.count; k++) {
     skyColor(pos.getY(k) / radius, c);
-    colors.set([c.r, c.g, c.b], k * 3);
+    col.setXYZ(k, c.r, c.g, c.b);
   }
-  g.setAttribute("color", new BufferAttribute(colors, 3));
-  return new Mesh(g, new MeshBasicMaterial({ vertexColors: true, side: BackSide, fog: false, depthWrite: false }));
+  col.needsUpdate = true;
+}
+
+function paintBackdrop(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d")!;
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, `#${SKY.upper.getHexString()}`);
+  grad.addColorStop(1, `#${SKY.horizon.getHexString()}`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 2, 256);
 }
 
 export interface Sky {
   environment: Texture;
+  /** Repaint everything for new sky colors. */
+  repaint(colors: typeof SKY): void;
   /** Screen-space gradient for orthographic views. */
   backdrop: Texture;
   /** Camera-centered dome for perspective views. */
@@ -55,20 +73,14 @@ export interface Sky {
 
 export function createSky(renderer: WebGLRenderer): Sky {
   const envScene = new Scene();
-  envScene.add(gradientSphere(10));
+  const envSphere = gradientSphere(10);
+  envScene.add(envSphere);
   const pmrem = new PMREMGenerator(renderer);
-  const environment = pmrem.fromScene(envScene, 0.02).texture;
-  pmrem.dispose();
 
   const canvas = document.createElement("canvas");
   canvas.width = 2;
   canvas.height = 256;
-  const ctx = canvas.getContext("2d")!;
-  const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, `#${SKY.upper.getHexString()}`);
-  grad.addColorStop(1, `#${SKY.horizon.getHexString()}`);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 2, 256);
+  paintBackdrop(canvas);
   const backdrop = new CanvasTexture(canvas);
   backdrop.colorSpace = SRGBColorSpace;
 
@@ -76,5 +88,22 @@ export function createSky(renderer: WebGLRenderer): Sky {
   dome.renderOrder = -1;
   dome.frustumCulled = false;
   dome.name = "sky-dome";
-  return { environment, backdrop, dome };
+
+  let target = pmrem.fromScene(envScene, 0.02);
+  const sky: Sky = {
+    environment: target.texture,
+    backdrop,
+    dome,
+    repaint(colors) {
+      for (const k of Object.keys(SKY) as (keyof typeof SKY)[]) SKY[k].copy(colors[k]);
+      recolor(envSphere, 10);
+      recolor(dome, 3000);
+      paintBackdrop(canvas);
+      backdrop.needsUpdate = true;
+      target.dispose();
+      target = pmrem.fromScene(envScene, 0.02);
+      sky.environment = target.texture;
+    },
+  };
+  return sky;
 }
