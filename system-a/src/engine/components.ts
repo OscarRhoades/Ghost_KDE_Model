@@ -53,7 +53,23 @@ export interface BuildingData {
   explicit: { floorHeight?: number; roof?: string; style?: string; seed?: number };
   /** Front door, facing the nearest street (resolved during load). */
   entrance?: Entrance;
+  /** Catalog choices from the file; when absent the style picks with the seed. */
+  shape?: string;
+  facade?: string;
+  ground?: string;
 }
+
+export interface PropData {
+  kind: string;
+  x: number;
+  z: number;
+  /** Fixed elevation from the file, or undefined for "on the ground". */
+  y?: number;
+  rot: number;
+  scale: number;
+  explicit: { rot?: number; scale?: number };
+}
+export const Prop = defineComponent<PropData>("Prop");
 
 /** A doorway in a wall: center on the ground plane, the wall's direction, size. */
 export interface Entrance {
@@ -84,7 +100,7 @@ export interface TerrainState {
 export const TerrainR = defineResource<TerrainState>("Terrain");
 
 /** The loaded file's metadata and plugin extensions. */
-export const CityR = defineResource<Pick<CityFile, "meta" | "extensions">>("City");
+export const CityR = defineResource<Pick<CityFile, "meta" | "extensions" | "streetscape">>("City");
 
 /** File id -> entity, per section ("road-node", "parcel", ...). */
 export const IdIndexR = defineResource<Map<string, Entity>>("IdIndex");

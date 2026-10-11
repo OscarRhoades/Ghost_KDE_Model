@@ -2,7 +2,7 @@
  * Loaders for the core sections of a city file. They only create entities and
  * resources (no rendering), so they run headless in tests and tools.
  */
-import type { World } from "../ecs/world";
+import { defineComponent, type World } from "../ecs/world";
 import {
   DEFAULT_FLOOR_HEIGHT,
   ROAD_DEFAULTS,
@@ -16,6 +16,7 @@ import {
   Building,
   IdIndexR,
   Parcel,
+  Prop,
   RoadEdge,
   RoadNode,
   SourceId,
@@ -191,6 +192,9 @@ export function buildingsData(): Plugin {
               seed: b.seed ?? hashString(b.id),
               baseY,
               explicit: { floorHeight: b.floorHeight, roof: b.roof, style: b.style, seed: b.seed },
+              shape: b.shape,
+              facade: b.facade,
+              ground: b.ground,
             });
             index.set(indexKey("building", b.id), e);
           }
@@ -208,6 +212,9 @@ export function buildingsData(): Plugin {
               ...(x.roof !== undefined ? { roof: x.roof as CityFile["buildings"][number]["roof"] } : {}),
               ...(x.style !== undefined ? { style: x.style } : {}),
               ...(x.seed !== undefined ? { seed: x.seed } : {}),
+              ...(b.shape !== undefined ? { shape: b.shape } : {}),
+              ...(b.facade !== undefined ? { facade: b.facade } : {}),
+              ...(b.ground !== undefined ? { ground: b.ground } : {}),
             });
           }
         },
@@ -215,6 +222,52 @@ export function buildingsData(): Plugin {
     },
   };
 }
+
+export function propsData(): Plugin {
+  return {
+    name: "props-data",
+    install(engine) {
+      engine.addLoader({
+        name: "props",
+        order: LoadOrder.props,
+        load(world, city) {
+          city.props.forEach((p, k) => {
+            const e = world.spawn();
+            if (p.id !== undefined) world.add(e, SourceId, p.id);
+            world.add(e, Prop, {
+              kind: p.kind,
+              x: p.p[0],
+              z: p.p[1],
+              y: p.y,
+              rot: p.rot ?? 0,
+              scale: p.scale ?? 1,
+              explicit: { rot: p.rot, scale: p.scale },
+            });
+            world.add(e, PropOrder, k);
+          });
+        },
+        save(world, out) {
+          const items = [...world.query(Prop)].sort((a, b) => world.read(a, PropOrder) - world.read(b, PropOrder));
+          for (const e of items) {
+            const p = world.read(e, Prop);
+            const id = world.get(e, SourceId);
+            out.props.push({
+              ...(id !== undefined ? { id } : {}),
+              kind: p.kind,
+              p: [p.x, p.z],
+              ...(p.explicit.rot !== undefined ? { rot: p.explicit.rot } : {}),
+              ...(p.y !== undefined ? { y: p.y } : {}),
+              ...(p.explicit.scale !== undefined ? { scale: p.explicit.scale } : {}),
+            });
+          }
+        },
+      });
+    },
+  };
+}
+
+/** Original position of a prop in the file, so saving keeps the order. */
+const PropOrder = defineComponent<number>("PropOrder");
 
 /**
  * Shapes the terrain to the city: flat pads under parcels (parks keep their
@@ -277,5 +330,5 @@ function markPolygon(hf: Heightfield, poly: readonly P2[], surface: Uint8Array, 
 
 /** Every core data plugin, in dependency order. */
 export function coreDataPlugins(): Plugin[] {
-  return [terrainData(), roadsData(), parcelsData(), buildingsData(), frontage(), terrainConform()];
+  return [terrainData(), roadsData(), parcelsData(), buildingsData(), propsData(), frontage(), terrainConform()];
 }

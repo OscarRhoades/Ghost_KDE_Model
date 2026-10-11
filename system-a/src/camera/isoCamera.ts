@@ -11,6 +11,7 @@ import { OrthographicCamera, Vector3 } from "three";
 import { defineResource } from "../ecs/world";
 import { FocusR, TerrainR } from "../engine/components";
 import type { Plugin } from "../engine/engine";
+import { QualityR } from "../render/quality";
 import { ActiveCameraR, RendererR } from "../render/renderPlugin";
 import { ViewR } from "./viewMode";
 
@@ -264,7 +265,8 @@ export function isoCamera(opts: IsoCameraOptions = {}): Plugin {
             z: target.z,
             radius: (viewHeight / 2) * Math.max(1, aspect) * 1.3,
             // Street-level detail only once zoomed in far enough to see it.
-            detailRadius: viewHeight <= DETAIL_VIEW ? (viewHeight / 2) * Math.max(1, aspect) * 1.2 : 0,
+            detailRadius:
+              viewHeight <= DETAIL_VIEW ? (viewHeight / 2) * Math.max(1, aspect) * 1.2 * (world.getResource(QualityR)?.detailScale ?? 1) : 0,
           });
         },
       });

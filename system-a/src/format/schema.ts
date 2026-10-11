@@ -114,8 +114,37 @@ export const Building = z.object({
   style: z.string().optional(),
   /** Seed for procedural detail (facade, interior). Derived from `id` when omitted. */
   seed: z.number().int().optional(),
+  /** Massing shape from the shape catalog, e.g. "podium-tower". Picked by style when omitted. */
+  shape: z.string().optional(),
+  /** Facade system from the facade catalog, e.g. "terracotta-baguettes". Picked by style when omitted. */
+  facade: z.string().optional(),
+  /** Ground-floor use from the shopfront catalog, e.g. "cafe", or "none". Picked by style when omitted. */
+  ground: z.string().optional(),
 });
 export type Building = z.infer<typeof Building>;
+
+/** A placed item from the prop catalog (tree, bench, fountain...). */
+export const Prop = z.object({
+  id: Id.optional(),
+  kind: z.string().min(1),
+  p: Vec2,
+  /** Heading in radians around the vertical axis. */
+  rot: finite.optional(),
+  /** Elevation; on the ground when omitted. */
+  y: finite.optional(),
+  scale: finite.positive().optional(),
+});
+export type Prop = z.infer<typeof Prop>;
+
+/** Automatic street dressing derived from the road network. */
+export const Streetscape = z.object({
+  trees: z.boolean().default(true),
+  lamps: z.boolean().default(true),
+  furniture: z.boolean().default(true),
+  markings: z.boolean().default(true),
+  /** Overall density multiplier (1 = default spacing). */
+  density: finite.positive().default(1),
+});
 
 export const Meta = z.object({
   name: z.string(),
@@ -134,6 +163,8 @@ export const CityFile = z
     roads: Roads.default({}),
     parcels: z.array(Parcel).default([]),
     buildings: z.array(Building).default([]),
+    props: z.array(Prop).default([]),
+    streetscape: Streetscape.optional(),
     extensions: z.record(z.unknown()).default({}),
   })
   .superRefine((city, ctx) => {

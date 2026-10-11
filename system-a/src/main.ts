@@ -5,6 +5,7 @@ import type { StickState } from "./camera/walkCamera";
 import { Building, FocusR, Parcel, RoadEdge } from "./engine/components";
 import { Engine } from "./engine/engine";
 import { parseCity } from "./format/schema";
+import { QualityR, saveTier, settingsFor, TIERS } from "./render/quality";
 import { coreDataPlugins, viewerPlugins } from "./plugins";
 
 const hud = document.getElementById("hud")!;
@@ -32,6 +33,21 @@ async function main() {
     engine.use(p);
   }
   engine.start();
+
+  // Quality button cycles Low / Medium / High and remembers the choice.
+  const qualityButton = document.getElementById("quality") as HTMLButtonElement;
+  const showQuality = () => {
+    const t = engine.world.resource(QualityR).tier;
+    qualityButton.textContent = `Quality: ${t[0].toUpperCase()}${t.slice(1)}`;
+  };
+  showQuality();
+  qualityButton.addEventListener("click", () => {
+    const q = engine.world.resource(QualityR);
+    const next = TIERS[(TIERS.indexOf(q.tier) + 1) % TIERS.length];
+    engine.world.setResource(QualityR, settingsFor(next, q.version + 1));
+    saveTier(next);
+    showQuality();
+  });
 
   const controls = engine.world.resource(IsoControlsR);
   const view = engine.world.resource(ViewR);

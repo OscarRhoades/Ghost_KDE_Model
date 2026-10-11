@@ -15,6 +15,7 @@ import {
 import { defineResource, type World } from "../ecs/world";
 import { FocusR, SceneObject } from "../engine/components";
 import type { Plugin } from "../engine/engine";
+import { detectTier, QualityR, savedTier, settingsFor } from "./quality";
 import { createSky, SKY, type Sky } from "./sky";
 
 export const SceneR = defineResource<Scene>("Scene");
@@ -43,13 +44,15 @@ export function renderPlugin(opts: RenderOptions): Plugin {
   return {
     name: "render",
     install(engine) {
+      let appliedQuality = -1;
       engine.addSystem({
         name: "render",
         start(world) {
-          // Phones: cap resolution and shadow detail to keep frame rates up.
-          const touch = window.matchMedia("(pointer: coarse)").matches;
+          // Quality tier: from the device, or the viewer's last choice.
+          const quality = settingsFor(savedTier() ?? detectTier());
+          world.setResource(QualityR, quality);
           const renderer = new WebGLRenderer({ antialias: true });
-          renderer.setPixelRatio(Math.min(window.devicePixelRatio, touch ? 1.5 : 2));
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, quality.pixelRatioCap));
           renderer.outputColorSpace = SRGBColorSpace;
           renderer.toneMapping = ACESFilmicToneMapping;
           renderer.shadowMap.enabled = true;
@@ -68,7 +71,8 @@ export function renderPlugin(opts: RenderOptions): Plugin {
 
           const sun = new DirectionalLight(PALETTE.sun, 2.2);
           sun.castShadow = true;
-          sun.shadow.mapSize.setScalar(touch ? 2048 : 4096);
+          sun.shadow.mapSize.setScalar(quality.shadowMapSize);
+          appliedQuality = quality.version;
           sun.shadow.bias = -0.0004;
           sun.shadow.normalBias = 0.6;
           scene.add(sun, sun.target);
@@ -101,6 +105,16 @@ export function renderPlugin(opts: RenderOptions): Plugin {
         update(world) {
           const camera = world.getResource(ActiveCameraR);
           if (!camera) return;
+          const q = world.resource(QualityR);
+          if (q.version !== appliedQuality) {
+            appliedQuality = q.version;
+            const r = world.resource(RendererR);
+            r.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatioCap));
+            const sunLight = world.resource(SunR);
+            sunLight.shadow.mapSize.setScalar(q.shadowMapSize);
+            sunLight.shadow.map?.dispose();
+            sunLight.shadow.map = null;
+          }
           // Keep the shadow frustum fitted around what the camera is looking at.
           const focus = world.getResource(FocusR);
           const sun = world.resource(SunR);

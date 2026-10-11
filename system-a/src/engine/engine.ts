@@ -26,6 +26,7 @@ export const LoadOrder = {
   roads: 10,
   parcels: 20,
   buildings: 30,
+  props: 35,
   /** Derived data that needs roads and buildings (front doors). */
   frontage: 40,
   /** Runs after every data section is in the world. */
@@ -75,7 +76,7 @@ export class Engine {
   load(city: CityFile): void {
     this.start();
     this.unload();
-    this.world.setResource(CityR, { meta: city.meta, extensions: city.extensions });
+    this.world.setResource(CityR, { meta: city.meta, extensions: city.extensions, streetscape: city.streetscape });
     this.world.setResource(IdIndexR, new Map());
     for (const loader of this.loaders) loader.load(this.world, city);
     this.schedule.onLoad(this.world);
@@ -99,6 +100,8 @@ export class Engine {
       roads: { nodes: [], edges: [] },
       parcels: [],
       buildings: [],
+      props: [],
+      ...(city.streetscape ? { streetscape: structuredClone(city.streetscape) } : {}),
       extensions: structuredClone(city.extensions),
     } as unknown as CityFile;
     for (const loader of this.loaders) loader.save?.(this.world, out);

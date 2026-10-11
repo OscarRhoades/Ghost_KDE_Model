@@ -10,6 +10,7 @@ import { defineResource } from "../ecs/world";
 import { FocusR, TerrainR } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { FootprintGrid } from "../physics/collision";
+import { QualityR } from "../render/quality";
 import { ActiveCameraR, PALETTE, RendererR, SceneR } from "../render/renderPlugin";
 import { NavR, WalkerR, type WalkPose } from "../interiors/nav";
 import { buildFootprintGrid, findSpawn, WALKER_RADIUS } from "./spawn";
@@ -23,7 +24,7 @@ const TOUCH_LOOK_SENSITIVITY = 0.005;
 const STICK_RADIUS = 60; // px of thumb travel for full speed
 const MAX_PITCH = Math.PI / 2 - 0.05;
 /** Full building detail within this distance (m) of the walker. */
-const DETAIL_RADIUS = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 320 : 480;
+const DETAIL_RADIUS = 480;
 
 /** Point the walker's view (radians; yaw 0 looks north, pitch 0 level). */
 export const WalkLookR = defineResource<(yaw: number, pitch?: number) => void>("WalkLook");
@@ -244,7 +245,7 @@ export function walkCamera(opts: { onStick?: (s: StickState) => void } = {}): Pl
           camera.position.set(pos.x, pos.y, pos.z);
           camera.rotation.set(pitch, yaw, 0, "YXZ");
 
-          world.setResource(FocusR, { x: pos.x, y: pos.y, z: pos.z, radius: 140, detailRadius: DETAIL_RADIUS });
+          world.setResource(FocusR, { x: pos.x, y: pos.y, z: pos.z, radius: 140, detailRadius: DETAIL_RADIUS * (world.getResource(QualityR)?.detailScale ?? 1) });
         },
       });
     },
