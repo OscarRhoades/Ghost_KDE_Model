@@ -6,7 +6,10 @@ import { Engine } from "../src/engine/engine";
 import { parseCity } from "../src/format/schema";
 import { pointInPolygon } from "../src/geom/polygon";
 import { createNavigator, type WalkPose } from "../src/interiors/nav";
-import { planBuilding, stairHeight } from "../src/interiors/plan";
+import { planBuilding, stairCoords, stairHeight } from "../src/interiors/plan";
+import { finishFor, furnitureCatalog } from "../src/interiors/furniture";
+import { edgesOf, rngFor } from "../src/buildings/kit";
+import { openingsAt } from "../src/buildings/styles";
 import { generateDemo } from "../generators/demo";
 
 function demoWorld() {
@@ -139,5 +142,66 @@ describe("navigator", () => {
     if (pose.building) return; // corner landed inside a neighbor; nothing to test here
     walkTo(pose, cx, cz);
     expect(pose.building).toBeNull();
+  });
+});
+
+describe("interiors round two", () => {
+  const plans = (style: string, n = 12) => buildings.filter((b) => b.style === style && b.floors >= 2).slice(0, n).map((b) => ({ b, plan: planBuilding(b) }));
+
+  it("has a furniture catalog of real pieces", () => {
+    expect(furnitureCatalog.size).toBeGreaterThanOrEqual(35);
+    const fin = finishFor(rngFor(1));
+    for (const name of furnitureCatalog.names()) expect(furnitureCatalog.require(name).parts(fin).length, name).toBeGreaterThan(0);
+  });
+
+  it("gives homes kitchens, bathrooms and bedrooms with beds", () => {
+    const kinds = new Set<string>();
+    let beds = 0;
+    for (const { plan } of [...plans("apartment"), ...plans("suburban-house")]) {
+      for (const f of plan.floors) for (const r of f.rooms) kinds.add(r.kind);
+      beds += plan.floors[1].furniture.filter((it) => it.color === 0xf1eee8).length;
+    }
+    for (const k of ["living", "bedroom", "bathroom"]) expect(kinds.has(k), k).toBe(true);
+    expect(beds).toBeGreaterThan(10);
+  });
+
+  it("varies office floors and furnishes ground floors by their use", () => {
+    const kinds = new Set<string>();
+    for (const { plan } of [...plans("office", 30), ...plans("glass-tower", 10)]) for (const f of plan.floors.slice(0, 4)) for (const r of f.rooms) kinds.add(r.kind);
+    expect(kinds.has("meeting") || kinds.has("breakout")).toBe(true);
+    const ground = new Set<string>();
+    for (const { plan } of plans("brick-midrise", 30)) for (const r of plan.floors[0].rooms) ground.add(r.kind);
+    expect([...ground].some((k) => ["cafe", "shop", "restaurant", "bank"].includes(k))).toBe(true);
+  });
+
+  it("keeps furniture off the stairs and gives rooms floor finishes", () => {
+    for (const { plan } of plans("office", 6)) {
+      if (!plan.stair) continue;
+      const f = plan.floors[1];
+      const s = plan.stair;
+      const inStair = (x: number, z: number) => {
+        const c = stairCoords(s, x, z);
+        return c.r > 0.05 && c.r < 0.95 && c.w > 0.05 && c.w < 0.95;
+      };
+      for (const it of f.furniture) expect(it.poly.every(([x, z]) => inStair(x, z))).toBe(false);
+      expect(f.rooms.some((r) => r.floor !== undefined)).toBe(true);
+    }
+  });
+
+  it("glazes interiors where the facade has windows", () => {
+    let matched = 0;
+    for (const b of buildings.filter((b) => ["apartment", "office", "brick-midrise"].includes(b.style)).slice(0, 20)) {
+      const at = openingsAt(b, 1);
+      for (const e of edgesOf(shellOf(b, 1))) {
+        const o = at(e);
+        if (!o) continue;
+        matched++;
+        for (const w of o) {
+          expect(w.s0).toBeGreaterThanOrEqual(-0.01);
+          expect(w.s1).toBeLessThanOrEqual(e.len + 0.01);
+        }
+      }
+    }
+    expect(matched).toBeGreaterThan(40);
   });
 });

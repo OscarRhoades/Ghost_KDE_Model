@@ -15,8 +15,26 @@ import { specialInfo } from "../buildings/special";
 import "../buildings/index"; // registers landmark interiors
 import type { BuildingData } from "../engine/components";
 import { clipSegment, pointInPolygon, quadPoint, type P2 } from "../geom/polygon";
+import { groundCatalog, groundUseOf } from "../buildings/ground";
+import { FLOORS, finishFor, furnitureCatalog, PAINTS, type Finish } from "./furniture";
+import { againstAny, furnish, grid, officeFloor, type Ctx, type Side } from "./rooms";
 
-export type RoomKind = "lobby" | "shop" | "office" | "living" | "kitchen" | "bedroom" | "hall" | "warehouse";
+export type RoomKind =
+  | "lobby"
+  | "shop"
+  | "office"
+  | "living"
+  | "kitchen"
+  | "bedroom"
+  | "hall"
+  | "warehouse"
+  | "bathroom"
+  | "studio"
+  | "meeting"
+  | "breakout"
+  | "cafe"
+  | "restaurant"
+  | "bank";
 
 export interface Wall {
   a: P2;
@@ -36,6 +54,8 @@ export interface Furniture {
 export interface Room {
   poly: P2[];
   kind: RoomKind;
+  /** Floor finish color, when it differs from the building's. */
+  floor?: number;
 }
 
 export interface Stair {
@@ -83,7 +103,7 @@ const DOOR_W = 0.95;
 const DOOR_H = 2.15;
 
 /** Local metric frame on a quad footprint. */
-class Frame {
+export class Frame {
   readonly U: number;
   readonly V: number;
   constructor(readonly q: P2[]) {
@@ -139,12 +159,18 @@ const stairRect = (s: LocalStair): [number, number, number, number] => {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 };
 
+/** Axis-aligned local rectangle [x0, y0, x1, y1]. */
+export type Rect = [number, number, number, number];
+const overlaps = (a: Rect, b: Rect) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+
 /** Builder for one floor's walls, rooms and furniture in local coordinates. */
-class FloorBuilder {
+export class FloorBuilder {
   walls: Wall[] = [];
   rooms: Room[] = [];
   furniture: Furniture[] = [];
   lights: P2[] = [];
+  /** Space taken by furniture, stairs and door swings. */
+  occupied: Rect[] = [];
   constructor(
     readonly f: Frame,
     readonly y: number,
@@ -167,6 +193,10 @@ class FloorBuilder {
     };
     let cursor = 0;
     for (const d of [...doors].sort((a, b) => a - b)) {
+      // Keep the floor clear on both sides of the doorway.
+      const cx = x0 + ((x1 - x0) * d) / len, cy = y0 + ((y1 - y0) * d) / len;
+      const along = Math.abs(x1 - x0) > Math.abs(y1 - y0);
+      this.occupied.push(along ? [cx - 0.7, cy - 1.0, cx + 0.7, cy + 1.0] : [cx - 1.0, cy - 0.7, cx + 1.0, cy + 0.7]);
       const s0 = Math.max(0, d - DOOR_W / 2);
       const s1 = Math.min(len, d + DOOR_W / 2);
       if (s0 > cursor) push(at(cursor), at(s0), this.y);
@@ -176,8 +206,8 @@ class FloorBuilder {
     if (cursor < len) push(at(cursor), at(len), this.y);
   }
 
-  room(x0: number, y0: number, x1: number, y1: number, kind: RoomKind) {
-    this.rooms.push({ poly: this.f.rect(x0, y0, x1, y1), kind });
+  room(x0: number, y0: number, x1: number, y1: number, kind: RoomKind, floor?: number) {
+    this.rooms.push({ poly: this.f.rect(x0, y0, x1, y1), kind, floor });
     this.lights.push(this.f.w((x0 + x1) / 2, (y0 + y1) / 2));
   }
 
@@ -186,6 +216,48 @@ class FloorBuilder {
     const poly = this.f.rect(x0, y0, x1, y1);
     if (!poly.every(([x, z]) => pointInPolygon(x, z, this.shell))) return;
     this.furniture.push({ poly, y0: this.y + h0, y1: this.y + h1, color });
+  }
+
+  /** Whether a local rectangle is indoors on this floor and clear of everything placed. */
+  free(r: Rect): boolean {
+    return this.inside(r) && !this.occupied.some((o) => overlaps(o, r));
+  }
+
+  inside(r: Rect): boolean {
+    const corners: [number, number][] = [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]]];
+    return corners.every(([x, y]) => {
+      const [wx, wz] = this.f.w(x, y);
+      return pointInPolygon(wx, wz, this.shell);
+    });
+  }
+
+  /**
+   * Place a catalog piece centered at (cx, cy), turned so its front faces
+   * dir: 0 = +y, 1 = +x, 2 = -y, 3 = -x. Returns false (placing nothing) if it doesn't fit.
+   */
+  place(kind: string, cx: number, cy: number, dir: number, finish: Finish, force = false): boolean {
+    const def = furnitureCatalog.get(kind);
+    if (!def) return false;
+    const t = (x: number, y: number): [number, number] =>
+      dir === 0 ? [cx + x, cy + y] : dir === 1 ? [cx + y, cy - x] : dir === 2 ? [cx - x, cy - y] : [cx - y, cy + x];
+    const rect = (x0: number, y0: number, x1: number, y1: number): Rect => {
+      const [ax, ay] = t(x0, y0);
+      const [bx, by] = t(x1, y1);
+      return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
+    };
+    const parts = def.parts(finish).map(([x0, y0, x1, y1, h0, h1, color]) => ({ r: rect(x0, y0, x1, y1), h0, h1, color }));
+    const bounds: Rect = [
+      Math.min(...parts.map((p) => p.r[0])),
+      Math.min(...parts.map((p) => p.r[1])),
+      Math.max(...parts.map((p) => p.r[2])),
+      Math.max(...parts.map((p) => p.r[3])),
+    ];
+    if (def.flat ? !this.inside(bounds) : !force && !this.free(bounds)) return false;
+    for (const { r, h0, h1, color } of parts) {
+      this.furniture.push({ poly: this.f.rect(r[0], r[1], r[2], r[3]), y0: this.y + h0, y1: this.y + h1, color });
+    }
+    if (!def.flat) this.occupied.push(bounds);
+    return true;
   }
 
   finish(index: number): FloorPlan {
@@ -202,20 +274,6 @@ class FloorBuilder {
   }
 }
 
-const C = {
-  desk: 0xe8e4dc,
-  deskTop: 0xd9cdb8,
-  sofa: 0x5b6670,
-  rug: 0xc9b89a,
-  wood: 0xa57b54,
-  bed: 0xf1eee8,
-  counter: 0xdedad2,
-  rack: 0x4f6f8f,
-  crate: 0xb48a5a,
-  bench: 0x8a7a66,
-  reception: 0x2f3438,
-  shelf: 0xcfc8bb,
-};
 
 function stairWalls(fb: FloorBuilder, s: LocalStair, index: number, floors: number) {
   const P = (r: number, w: number): [number, number] => [s.ox + s.rx * r * s.run + s.ax * w * s.width, s.oy + s.ry * r * s.run + s.ay * w * s.width];
@@ -229,35 +287,8 @@ function stairWalls(fb: FloorBuilder, s: LocalStair, index: number, floors: numb
   if (index === floors - 1) seg(P(0, 0), P(0, 0.5), [], 1.1);
 }
 
-function officeDesks(fb: FloorBuilder, f: Frame, avoid: [number, number, number, number] | null) {
-  for (let y = 2; y + 1 < f.V - 1.5; y += 3.2) {
-    for (let x = 2; x + 1.6 < f.U - 1.5; x += 2.4) {
-      if (avoid && x + 1.6 > avoid[0] - 1.5 && x < avoid[2] + 1.5 && y + 0.8 > avoid[1] - 1.5 && y < avoid[3] + 1.5) continue;
-      fb.box(x, y, x + 1.6, y + 0.8, 0.7, 0.76, C.deskTop);
-      fb.box(x + 0.05, y + 0.05, x + 0.15, y + 0.75, 0, 0.7, C.desk);
-      fb.box(x + 1.45, y + 0.05, x + 1.55, y + 0.75, 0, 0.7, C.desk);
-    }
-  }
-}
-
-function living(fb: FloorBuilder, x0: number, y0: number, x1: number, y1: number) {
-  const cx = (x0 + x1) / 2;
-  const cy = (y0 + y1) / 2;
-  fb.box(cx - 1.5, cy - 1.0, cx + 1.5, cy + 1.0, 0, 0.02, C.rug);
-  fb.box(cx - 1.1, y1 - 1.3, cx + 1.1, y1 - 0.4, 0, 0.75, C.sofa);
-  fb.box(cx - 0.5, cy - 0.3, cx + 0.5, cy + 0.3, 0, 0.4, C.wood);
-}
-
-function bedroom(fb: FloorBuilder, x0: number, y0: number, x1: number) {
-  const cx = (x0 + x1) / 2;
-  fb.box(cx - 0.8, y0 + 0.3, cx + 0.8, y0 + 2.3, 0, 0.5, C.bed);
-  fb.box(cx - 0.8, y0 + 0.2, cx + 0.8, y0 + 0.3, 0, 1.0, C.wood);
-  fb.box(cx + 1.0, y0 + 0.3, cx + 1.5, y0 + 0.8, 0, 0.5, C.wood);
-}
-
 /** Generate the full plan for a building. Deterministic per seed. */
 export function planBuilding(b: BuildingData): BuildingPlan {
-  const rng = rngFor(b.seed ^ 0x1a7e);
   const n = interiorFloors(b);
   const fh = interiorFloorHeight(b);
   // Frame on the ground floor's outline when it is a quad (e.g. a courtyard's front
@@ -322,6 +353,48 @@ export function planBuilding(b: BuildingData): BuildingPlan {
   }
   const sr = ls ? stairRect(ls) : null;
 
+  // Finishes shared by every floor.
+  const frng = rngFor(b.seed ^ 0xf1a5);
+  const fin = finishFor(frng);
+  const floorFin = {
+    wood: frng.pick(FLOORS.wood),
+    tile: frng.pick(FLOORS.tile),
+    carpet: frng.pick(FLOORS.carpet),
+    stone: frng.pick(FLOORS.stone),
+    concrete: frng.pick(FLOORS.concrete),
+  };
+  if (!special) plan.wallColor = frng.pick(PAINTS);
+  // Which side of the local frame faces the street: the one nearest the front door.
+  let front: Side = "s";
+  if (quad && b.entrance) {
+    const [ex, ey] = quad.local([b.entrance.x, b.entrance.z]);
+    const d = { s: Math.abs(ey), n: Math.abs(quad.V - ey), w: Math.abs(ex), e: Math.abs(quad.U - ex) };
+    front = (Object.keys(d) as Side[]).reduce((m, k) => (d[k] < d[m] ? k : m), "s");
+  }
+  const use = groundUseOf(b);
+  const groundFloor = (c: Ctx, U: number, V: number, fallback: RoomKind) => {
+    const kind: RoomKind = use === "none" || use === "arcade" ? fallback : groundCatalog.require(use).room;
+    const depth = front === "s" || front === "n" ? V : U;
+    if (kind === fallback || depth < 16) {
+      furnish(c, kind, [0, 0, U, V], { use });
+      return;
+    }
+    // The shop takes the street side; the building's lobby is behind it.
+    const D = 11;
+    const [shop, back]: [Rect, Rect] =
+      front === "s" ? [[0, 0, U, D], [0, D, U, V]] : front === "n" ? [[0, V - D, U, V], [0, 0, U, V - D]] : front === "w" ? [[0, 0, D, V], [D, 0, U, V]] : [[U - D, 0, U, V], [0, 0, U - D, V]];
+    // A dividing wall, unless it would cut through the stairwell.
+    const line = front === "s" ? D : front === "n" ? V - D : front === "w" ? D : U - D;
+    const horizontal = front === "s" || front === "n";
+    const cuts = sr && (horizontal ? sr[1] - 1.5 < line && line < sr[3] + 1.5 : sr[0] - 1.5 < line && line < sr[2] + 1.5);
+    if (!cuts) {
+      if (horizontal) c.fb.wall(0, line, U, line, [U * 0.15, U * 0.85]);
+      else c.fb.wall(line, 0, line, V, [V * 0.15, V * 0.85]);
+    }
+    furnish(c, kind, shop, { use });
+    furnish(c, fallback, back);
+  };
+
   const buildFloor = (f: number): FloorPlan => {
     const y = b.baseY + f * fh + 0.05;
     const ceiling = b.baseY + (f + 1) * fh - SLAB;
@@ -351,6 +424,9 @@ export function planBuilding(b: BuildingData): BuildingPlan {
       return fb.finish(f);
     }
 
+    const c: Ctx = { fb, fin, rng: rngFor(b.seed ^ (0x51f0 + f * 7919)), front, floors: floorFin };
+    if (sr) fb.occupied.push([sr[0] - 0.3, sr[1] - 1.3, sr[2] + 0.3, sr[3] + 1.3]);
+
     if (house) {
       const up = f >= 1 ? quad.bounds(shell) : null;
       const x0 = up ? up.x0 : 0;
@@ -360,51 +436,36 @@ export function planBuilding(b: BuildingData): BuildingPlan {
       if (f === 0) {
         if (U - xp > 3.5) {
           fb.wall(xp, 0, xp, V, [V * 0.3 + 0.6]);
-          fb.room(0, 0, xp, V, "kitchen");
-          fb.room(xp, 0, U, V, "living");
-          fb.box(0.3, 0.3, Math.min(3.6, xp - 0.3), 0.9, 0, 0.92, C.counter);
-          fb.box(0.8, 1.8, Math.min(2.8, xp - 0.8), 2.7, 0, 0.92, C.counter);
-          living(fb, xp, 0, U, V);
-        } else {
-          fb.room(0, 0, U, V, "living");
-          living(fb, 0, 0, U, V);
-        }
+          furnish(c, "kitchen", [0, 0, xp, V]);
+          furnish(c, "living", [xp, 0, U, V]);
+        } else furnish(c, "living", [0, 0, U, V]);
       } else {
         const xb = Math.max(xp, x0 + 2);
         if (x1 - xb > 3) {
           fb.wall(xb, y0, xb, V, [y0 + 0.9]);
-          fb.room(x0, y0, xb, V, "hall");
+          furnish(c, "hall", [x0, y0, xb, V]);
           if (x1 - xb > 7.5) {
+            // Main bedroom with an ensuite, and a second bedroom beyond.
             const xm = (xb + x1) / 2;
-            fb.wall(xm, y0, xm, V, [y0 + 0.9]);
-            fb.room(xb, y0, xm, V, "bedroom");
-            fb.room(xm, y0, x1, V, "bedroom");
-            bedroom(fb, xb, y0, xm);
-            bedroom(fb, xm, y0, x1);
-          } else {
-            fb.room(xb, y0, x1, V, "bedroom");
-            bedroom(fb, xb, y0, x1);
-          }
-        } else {
-          fb.room(x0, y0, x1, V, "bedroom");
-        }
+            const yb = y0 + 2.6;
+            fb.wall(xm, y0, xm, V, [y0 + 1.3, V - 0.9]);
+            fb.wall(xm, yb, x1, yb);
+            furnish(c, "bedroom", [xb, y0, xm, V]);
+            furnish(c, "bathroom", [xm, y0, x1, yb]);
+            furnish(c, "bedroom", [xm, yb, x1, V], { double: false });
+          } else furnish(c, "bedroom", [xb, y0, x1, V]);
+        } else furnish(c, "bedroom", [x0, y0, x1, V]);
       }
     } else if (b.style === "apartment" || b.style === "brick-midrise") {
-      if (f === 0) {
-        const kind: RoomKind = b.style === "brick-midrise" ? "shop" : "lobby";
-        fb.room(0, 0, U, V, kind);
-        if (kind === "shop") {
-          for (let x = 2.5; x + 1.2 < U - 2; x += 3.6) for (let y = 2; y + 1.2 < V / 2 - 0.5; y += 3.4) fb.box(x, y, x + 1.2, y + 1.2, 0, 0.9, C.shelf);
-          fb.box(1, V - 2.2, 4, V - 1.4, 0, 1.0, C.counter);
-        } else {
-          fb.box(U / 2 - 2, 1.5, U / 2 + 2, 2.2, 0, 0.45, C.bench);
-        }
-      } else {
+      if (f === 0) groundFloor(c, U, V, "lobby");
+      else {
         const c0 = V / 2 - 0.9;
         const c1 = V / 2 + 0.9;
         const cuts = Array.from({ length: Math.max(1, Math.round(U / 8)) + 1 }, (_, k) => (U * k) / Math.max(1, Math.round(U / 8)));
         const southDoors: number[] = [];
         const northDoors: number[] = [];
+        // The stair and the corridor are claimed before units are furnished.
+        fb.occupied.push([0, c0, U, c1]);
         for (let k = 0; k + 1 < cuts.length; k++) {
           const a = cuts[k];
           const w = cuts[k + 1] - a;
@@ -417,19 +478,24 @@ export function planBuilding(b: BuildingData): BuildingPlan {
             fb.wall(a, 0, a, c0);
             if (!(sr && a > sr[0] - 0.4 && a < sr[2] + 0.4)) fb.wall(a, c1, a, V);
           }
-          // Each unit: living room by the corridor door, bedroom beyond.
+          // Each unit: open living room and kitchen by the corridor door, then a
+          // bathroom off the living room and a bedroom beyond. Narrow units are studios.
           for (const [ya, yb] of [[0, c0], [c1, V]] as const) {
-            if (w >= 7) {
-              const xm = a + w * 0.55;
-              const clash = ya === c1 && sr && xm > sr[0] - 0.3 && xm < sr[2] + 0.3;
-              if (!clash) fb.wall(xm, ya, xm, yb, [(ya + yb) / 2]);
-              fb.room(a, ya, xm, yb, "living");
-              fb.room(xm, ya, a + w, yb, "bedroom");
-              living(fb, a, ya, xm, yb);
-              bedroom(fb, xm, ya, a + w);
-            } else {
-              fb.room(a, ya, a + w, yb, "living");
-            }
+            const xm = a + w * 0.55;
+            const clash = ya === c1 && sr && xm > sr[0] - 0.3 && xm < sr[2] + 0.3;
+            if (w >= 7 && !clash && yb - ya > 5) {
+              const corridorSide = ya === 0 ? yb : ya;
+              const bath: Rect = ya === 0 ? [xm, yb - 2.4, a + w, yb] : [xm, ya, a + w, ya + 2.4];
+              const bed: Rect = ya === 0 ? [xm, ya, a + w, yb - 2.4] : [xm, ya + 2.4, a + w, yb];
+              const bathDoor = ya === 0 ? yb - 1.2 : ya + 1.2;
+              fb.wall(xm, ya, xm, yb, [bathDoor, (bed[1] + bed[3]) / 2].map((y) => y - ya));
+              fb.wall(xm, ya === 0 ? bath[1] : bath[3], a + w, ya === 0 ? bath[1] : bath[3]);
+              void corridorSide;
+              furnish(c, "living", [a, ya, xm, yb]);
+              againstAny(c, "kitchen-run", [a, ya, xm, yb], ["w", "e"], [0.5, 0.3, 0.7]);
+              furnish(c, "bathroom", bath);
+              furnish(c, "bedroom", bed);
+            } else furnish(c, "studio", [a, ya, a + w, yb]);
           }
         }
         fb.wall(0, c0, U, c0, southDoors);
@@ -440,29 +506,26 @@ export function planBuilding(b: BuildingData): BuildingPlan {
         } else {
           fb.wall(0, c1, U, c1, northDoors);
         }
-        fb.room(0, c0, U, c1, "hall");
+        fb.room(0, c0, U, c1, "hall", floorFin.wood);
       }
     } else if (b.style === "industrial") {
-      fb.room(0, 0, U, V, "warehouse");
-      for (let y = 4; y + 1.1 < V - 3; y += 4.6) {
-        for (let x = 3; x + 6 < U - 3; x += 7.5) {
-          fb.box(x, y, x + 6, y + 1.1, 0, 4.2, C.rack);
-          if (rng.chance(0.6)) fb.box(x + 0.5, y - 1.6, x + 1.7, y - 0.4, 0, 1.0, C.crate);
-        }
+      // A small office in one corner of the shed.
+      const ow = Math.min(8, U * 0.25), od = Math.min(6, V * 0.35);
+      const [ox0, ox1] = front === "e" ? [U - ow, U] : [0, ow];
+      if (U > 20 && V > 14) {
+        fb.wall(ox0 === 0 ? ow : U - ow, 0, ox0 === 0 ? ow : U - ow, od, [od / 2], 3);
+        fb.wall(ox0, od, ox1, od, [], 3);
+        furnish(c, "office", [ox0, 0, ox1, od]);
+        fb.occupied.push([ox0, 0, ox1, od + 0.5]);
       }
+      furnish(c, "warehouse", [0, 0, U, V]);
     } else if (b.style === "civic") {
-      fb.room(0, 0, U, V, "lobby");
-      for (let x = 4; x + 2.5 < U - 4; x += 5) fb.box(x, V / 2 - 0.3, x + 2.5, V / 2 + 0.3, 0, 0.45, C.bench);
+      furnish(c, "lobby", [0, 0, U, V]);
+      grid(c, "bench-seat", [0, 0, U, V], 5, 6, 4, 0, 0.3);
     } else {
-      // Offices and towers: lobby with a reception desk, then open-plan floors.
-      if (f === 0) {
-        fb.room(0, 0, U, V, "lobby");
-        const ry = sr ? sr[1] - 4.5 : V / 2;
-        fb.box(U / 2 - 2.2, ry, U / 2 + 2.2, ry + 0.8, 0, 1.05, C.reception);
-      } else {
-        fb.room(0, 0, U, V, "office");
-        officeDesks(fb, quad, sr);
-      }
+      // Offices and towers: a lobby or shop below, then floors that vary.
+      if (f === 0) groundFloor(c, U, V, "lobby");
+      else officeFloor(c, U, V, sr);
     }
     return fb.finish(f);
   };

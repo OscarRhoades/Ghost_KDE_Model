@@ -119,7 +119,7 @@ export function groundUseOf(b: BuildingData): string {
   }
 }
 
-const near = (e: Edge, pts: [number, number][] | undefined) =>
+export const nearStreet = (e: Edge, pts: [number, number][] | undefined) =>
   !!pts?.some(([x, z]) => Math.hypot(x - (e.a[0] + e.b[0]) / 2, z - (e.a[1] + e.b[1]) / 2) < 0.5);
 
 /** Draw the ground floor (floor 0) of a slice with the given use. */
@@ -137,7 +137,7 @@ export function drawGround(p: Parts, s: Slice, ctx: FacadeCtx, use: string): voi
     // Colonnade standing on the pavement with a soffit over a covered walk.
     walls(p.glass, s.edges, y, top, ctx.pal.glass, 0, door);
     for (const e of s.edges) {
-      if (!near(e, b.streetSides)) continue;
+      if (!nearStreet(e, b.streetSides)) continue;
       for (const x of bays(e.len, 5, 0.3)) box(p.matte, e, x - 0.3, x + 0.3, y, top, 2.2, 2.8, ctx.pal.trim);
       box(p.matte, e, -0.2, e.len + 0.2, top - 0.6, top, 0, 2.9, ctx.pal.trim);
     }
@@ -146,7 +146,7 @@ export function drawGround(p: Parts, s: Slice, ctx: FacadeCtx, use: string): voi
   }
 
   for (const e of s.edges) {
-    const street = near(e, b.streetSides) || !!doorOn(e, door);
+    const street = nearStreet(e, b.streetSides) || !!doorOn(e, door);
     if (!street) {
       // Side and back walls: plain wall with a few windows.
       walls(p.matte, [e], y, top, ctx.pal.wall, 0, door);

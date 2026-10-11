@@ -6,6 +6,8 @@
  */
 import { Color, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, type Material } from "three";
 import { bays, cap, doorOn, edgesOf, type Edge } from "../buildings/kit";
+import { specialInfo } from "../buildings/special";
+import { openingsAt, type WallOpening } from "../buildings/styles";
 import { defineResource } from "../ecs/world";
 import type { BuildingData } from "../engine/components";
 import type { Plugin } from "../engine/engine";
@@ -32,6 +34,13 @@ const ROOM_NAMES: Record<string, string> = {
   bedroom: "Bedroom",
   hall: "Hallway",
   warehouse: "Warehouse",
+  bathroom: "Bathroom",
+  studio: "Studio",
+  meeting: "Meeting room",
+  breakout: "Kitchen",
+  cafe: "Café",
+  restaurant: "Restaurant",
+  bank: "Bank",
 };
 
 interface Builders {
@@ -51,7 +60,15 @@ function inner(mb: MeshBuilder, e: Edge, s0: number, s1: number, y0: number, y1:
 }
 
 /** Inner face of one floor's outer walls, with windows according to the glazing. */
-function shellInside(b: Builders, plan: BuildingPlan, fp: FloorPlan, door: BuildingData["entrance"], wall: Color, glass: Color) {
+function shellInside(
+  b: Builders,
+  plan: BuildingPlan,
+  fp: FloorPlan,
+  door: BuildingData["entrance"],
+  wall: Color,
+  glass: Color,
+  windows: ((e: Edge) => WallOpening[] | null) | null,
+) {
   const y0 = fp.y - 0.05;
   const y1 = fp.ceiling;
   const fh = plan.floorHeight;
@@ -59,7 +76,15 @@ function shellInside(b: Builders, plan: BuildingPlan, fp: FloorPlan, door: Build
     // Openings along this wall: [s0, s1, bottom, top, isDoor].
     const openings: [number, number, number, number, boolean][] = [];
     const d = fp.index === 0 ? doorOn(e, door) : null;
-    if (plan.glazing === "full") {
+    const fromFacade = windows?.(e);
+    if (fromFacade) {
+      // Exactly where the facade has its windows.
+      for (const o of fromFacade) {
+        const lo = y0 + 0.05 + o.y0;
+        const hi = Math.min(y1 - 0.02, y0 + 0.05 + o.y1);
+        if (hi - lo > 0.2 && o.s1 - o.s0 > 0.1) openings.push([Math.max(0, o.s0), Math.min(e.len, o.s1), lo, hi, false]);
+      }
+    } else if (plan.glazing === "full") {
       openings.push([0.05, e.len - 0.05, y0 + 0.15, y1 - 0.05, false]);
     } else if (plan.glazing === "punched") {
       const cuts = bays(e.len, 3.4, 0.6);
@@ -158,7 +183,9 @@ export function buildInterior(b: BuildingData, plan: BuildingPlan, f0: number, f
     const holeAbove = plan.stair && f < n - 1 ? [stairHole(plan.stair)] : [];
     cap(out.matte, fp.shell, fp.y, floorC, false, holeBelow);
     if (!(plan.openCeiling && f === n - 1)) cap(out.matte, fp.shell, fp.ceiling, ceilingC, true, holeAbove);
-    shellInside(out, plan, fp, b.entrance, wallC, glassC);
+    shellInside(out, plan, fp, b.entrance, wallC, glassC, specialInfo.has(b.style) ? null : openingsAt(b, f));
+    // Room floor finishes, just above the slab.
+    for (const room of fp.rooms) if (room.floor !== undefined) cap(out.matte, room.poly, fp.y + 0.008, hexColor(room.floor));
     for (const w of fp.walls) wallBox(out.matte, w.a, w.b, w.y0, w.y1, wallC);
     for (const it of fp.furniture) solid(out.matte, it.poly, it.y0, it.y1, hexColor(it.color));
     for (const [x, z] of fp.lights) {

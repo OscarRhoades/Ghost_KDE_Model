@@ -7,11 +7,11 @@
 import { Catalog } from "../catalog/registry";
 import type { BuildingData } from "../engine/components";
 import { insetConvex, type P2 } from "../geom/polygon";
-import { bays, box, cap, doorFrame, edgesOf, panel, prism, walls, type Parts, type Rng } from "./kit";
+import { bays, box, cap, doorFrame, doorOn, edgesOf, panel, prism, walls, type Edge, type Parts, type Rng } from "./kit";
 import { facadeCatalog, type FacadeCtx, type FacadeSystem, type Slice } from "./facades";
 import { lookRng, SWATCH, tint, type Palette } from "./look";
 import { groundPlans, isPitched, massingOf, planAt, type Volume } from "./massing";
-import { drawGround, groundUseOf } from "./ground";
+import { drawGround, groundUseOf, nearStreet } from "./ground";
 import { pitchedRoof, roofCatalog } from "./roofs";
 
 export interface BuildingStyle {
@@ -295,3 +295,43 @@ registerStyle("civic", {
     prism(p.matte, b.footprint, b.baseY - FOUNDATION, b.baseY + b.floors * b.floorHeight, SWATCH.white[0], SWATCH.roof);
   },
 });
+
+/** A window or shopfront opening on an outer wall, heights relative to the floor. */
+export type WallOpening = { s0: number; s1: number; y0: number; y1: number };
+
+/**
+ * The openings the facade puts in a ground-plan edge at floor f, so interiors
+ * glaze exactly where the outside has windows. Returns null for walls the
+ * facade doesn't describe (the caller falls back to a default).
+ */
+export function openingsAt(b: BuildingData, f: number): (e: Edge) => WallOpening[] | null {
+  const look = lookOf(b);
+  const ctx = facadeCtx(b, look);
+  const use = groundUseOf(b);
+  const cands: { e: Edge; s: Slice; ground: boolean }[] = [];
+  for (const v of massingOf(b).volumes) {
+    if (f < v.f0 || f >= v.f1) continue;
+    for (const s of slicesOf(v)) {
+      if (f < s.f0 || f >= s.f1) continue;
+      for (const e of s.edges) cands.push({ e, s, ground: use !== "none" && f === 0 && v.role !== "wing" });
+    }
+  }
+  const close = (p: P2, q: P2) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.06;
+  return (e) => {
+    let flip = false;
+    let hit = cands.find((c) => close(c.e.a, e.a) && close(c.e.b, e.b));
+    if (!hit) {
+      hit = cands.find((c) => close(c.e.a, e.b) && close(c.e.b, e.a));
+      flip = !!hit;
+    }
+    if (!hit) return null;
+    const fh = b.floorHeight;
+    let out: WallOpening[];
+    if (hit.ground) {
+      if (use === "arcade") out = [{ s0: 0.05, s1: hit.e.len - 0.05, y0: 0.1, y1: fh - 0.1 }];
+      else if (nearStreet(hit.e, b.streetSides) || doorOn(hit.e, b.entrance)) out = [{ s0: 0.3, s1: hit.e.len - 0.3, y0: 0.4, y1: fh - 1.0 }];
+      else out = bays(hit.e.len, 4, 1).slice(0, -1).map((x) => ({ s0: x + 1, s1: x + 2.6, y0: 1.1, y1: fh - 0.6 }));
+    } else out = look.facade.openings(hit.e, f, ctx, hit.s);
+    return flip ? out.map((o) => ({ ...o, s0: e.len - o.s1, s1: e.len - o.s0 })) : out;
+  };
+}
