@@ -218,6 +218,37 @@ function punchedSystem(balconyChance: number): FacadeSystem {
 }
 
 facadeCatalog.register("punched-render", punchedSystem(0.7), { tags: ["residential"] });
+
+/** Green wall: punched windows, planter ledges on every floor and climbers up the piers. */
+const greenWall: FacadeSystem = {
+  glazing: "punched",
+  glassy: false,
+  params: (rng) => ({ bay: rng.range(3.2, 4.0), climbers: rng.chance(0.6) ? 1 : 0 }),
+  openings: (e, _f, ctx) => bayOpenings(e, ctx.params.bay, 0.6, 0.9, ctx.fh - 0.5, 0.7),
+  draw(p, s, ctx) {
+    walls(p.matte, s.edges, ctx.y(s.f0), ctx.y(s.f1), ctx.pal.wall, 0, doorFor(s, ctx));
+    punched(p, s, ctx, greenWall);
+    const leaf = SWATCH.green;
+    const deep = SWATCH.green.clone().offsetHSL(0.02, 0.05, -0.12);
+    for (const e of s.edges) {
+      if (e.len < 3) continue;
+      for (let f = Math.max(1, s.f0); f < s.f1; f++) {
+        const y = ctx.y(f);
+        box(p.matte, e, 0.3, e.len - 0.3, y - 0.05, y + 0.35, 0, 0.5, ctx.pal.trim);
+        box(p.matte, e, 0.4, e.len - 0.4, y + 0.35, y + 0.75, 0.08, 0.46, (f + Math.round(e.len)) % 3 ? leaf : deep);
+      }
+      if (!ctx.params.climbers) continue;
+      const cuts = bays(e.len, ctx.params.bay, 0.6);
+      for (const x of cuts) {
+        if (x < 0.5 || x > e.len - 0.5) continue;
+        box(p.matte, e, x - 0.3, x + 0.3, ctx.y(s.f0) + (s.f0 === 0 ? 2.6 : 0), ctx.y(s.f1) - 0.2, 0.02, 0.22, deep);
+      }
+    }
+    if (s.top) band(p.matte, s.edges, ctx.y(s.f1) - 0.1, ctx.y(s.f1) + 0.6, 0.15, ctx.pal.trim);
+    doorFrame(p.metal, s.edges, doorFor(s, ctx), ctx.pal.frame);
+  },
+};
+facadeCatalog.register("green-wall", greenWall, { tags: ["residential", "eco"] });
 facadeCatalog.register("punched-brick", punchedSystem(0.6), { tags: ["residential", "brick"] });
 
 /** Modern house: render below with big garden glazing, clad upper box with a strip window. */

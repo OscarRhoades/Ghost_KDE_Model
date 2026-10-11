@@ -14,6 +14,11 @@ const C = {
   marking: new Color("#f2efe6"),
   centre: new Color("#e8c45a"),
   bike: new Color("#6f8f6a"),
+  trackBed: new Color("#7f9f62"),
+  rail: new Color("#8d9196"),
+  sleeper: new Color("#6b6259"),
+  deck: new Color("#b9b5ad"),
+  railing: new Color("#3a3f45"),
 };
 
 /** Heights above the graded terrain, in meters. */
@@ -70,7 +75,10 @@ export function roadView(): Plugin {
                 if (stop) ribbon(mb, stop, atA ? -half + 0.3 : 0, atA ? 0 : half - 0.3, MARK_Y, C.marking);
               }
               const lined = trim(path, (degree.get(r.a) ?? 0) > 2 ? (junction.get(r.a) ?? 0) + 4 : 0, (degree.get(r.b) ?? 0) > 2 ? (junction.get(r.b) ?? 0) + 4 : 0);
-              if (lined && r.kind === "avenue") {
+              if (lined && r.tram) {
+                // Grass track bed with two tracks; no centre line.
+                tracks(mb, lined);
+              } else if (lined && r.kind === "avenue") {
                 // Double centre line, dashed lane dividers, bike lanes at the curb.
                 ribbon(mb, lined, -0.25, -0.1, MARK_Y, C.centre);
                 ribbon(mb, lined, 0.1, 0.25, MARK_Y, C.centre);
@@ -84,6 +92,8 @@ export function roadView(): Plugin {
                 }
               } else if (lined) dashes(mb, lined, 0);
             }
+            if (r.tram && r.kind !== "street" && r.kind !== "avenue") tracks(mb, path);
+            if (r.bridge) bridge(mb, path, half + r.sidewalk);
           }
 
           for (const [n, radius] of junction) {
@@ -152,6 +162,42 @@ function curb(mb: MeshBuilder, path: P3[], offset: number) {
       C.curb,
     );
   }
+}
+
+/** Two tram tracks on a grass bed down the middle of the road. */
+function tracks(mb: MeshBuilder, path: P3[]) {
+  ribbon(mb, path, -3.1, 3.1, MARK_Y - 0.006, C.trackBed);
+  for (const c of [-1.55, 1.55]) {
+    for (const g of [-0.72, 0.72]) {
+      ribbon(mb, path, c + g - 0.04, c + g + 0.04, MARK_Y + 0.05, C.rail);
+      curbFace(mb, path, c + g - 0.04, MARK_Y - 0.006, MARK_Y + 0.05);
+      curbFace(mb, path, c + g + 0.04, MARK_Y - 0.006, MARK_Y + 0.05);
+    }
+  }
+}
+
+/** A vertical strip along the path at a signed offset, between two heights. */
+function curbFace(mb: MeshBuilder, path: P3[], offset: number, y0: number, y1: number, color = C.rail) {
+  const ns = normals(path);
+  for (let k = 1; k < path.length; k++) {
+    const p = path[k - 1], q = path[k];
+    const np = ns[k - 1], nq = ns[k];
+    const a: V3 = [p[0] + np[0] * offset, p[1] + y0, p[2] + np[1] * offset];
+    const b: V3 = [q[0] + nq[0] * offset, q[1] + y0, q[2] + nq[1] * offset];
+    const c: V3 = [q[0] + nq[0] * offset, q[1] + y1, q[2] + nq[1] * offset];
+    const d: V3 = [p[0] + np[0] * offset, p[1] + y1, p[2] + np[1] * offset];
+    mb.quadFacing(a, b, c, d, [np[0], 0, np[1]], color);
+    mb.quadFacing(a, b, c, d, [-np[0], 0, -np[1]], color);
+  }
+}
+
+/** Deck edges and railings for a bridge `half` meters to each side. */
+function bridge(mb: MeshBuilder, path: P3[], half: number) {
+  for (const side of [-1, 1]) {
+    curbFace(mb, path, side * half, -1.4, SIDEWALK_Y, C.deck);
+    curbFace(mb, path, side * (half - 0.1), SIDEWALK_Y, SIDEWALK_Y + 1.1, C.railing);
+  }
+  ribbon(mb, path, -half, half, -1.4, C.deck);
 }
 
 function length(path: P3[]): number {

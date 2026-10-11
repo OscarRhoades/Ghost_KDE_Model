@@ -99,6 +99,9 @@ groundCatalog.register("bike-shop", {
 }, { tags: ["shop"] });
 groundCatalog.register("arcade", { fascia: [], lettering: "#ffffff", room: "lobby" }, { tags: ["office"] });
 
+/** Share of buildings of a style that get a shop on the ground floor (styles not built in). */
+export const styleShopChance = new Map<string, number>();
+
 /** Which ground-floor use a building has: from the file, or by style and seed. */
 export function groundUseOf(b: BuildingData): string {
   if (b.ground) return b.ground === "none" || groundCatalog.has(b.ground) ? b.ground : "none";
@@ -115,7 +118,7 @@ export function groundUseOf(b: BuildingData): string {
     case "glass-tower":
       return rng.chance(0.3) ? "arcade" : "none";
     default:
-      return "none";
+      return rng.chance(styleShopChance.get(b.style) ?? 0) ? shop() : "none";
   }
 }
 

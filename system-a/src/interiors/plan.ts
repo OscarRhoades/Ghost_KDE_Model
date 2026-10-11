@@ -16,6 +16,7 @@ import "../buildings/index"; // registers landmark interiors
 import type { BuildingData } from "../engine/components";
 import { clipSegment, pointInPolygon, quadPoint, type P2 } from "../geom/polygon";
 import { groundCatalog, groundUseOf } from "../buildings/ground";
+import { planKind } from "../buildings/kinds";
 import { FLOORS, finishFor, furnitureCatalog, PAINTS, type Finish } from "./furniture";
 import { againstAny, furnish, grid, officeFloor, type Ctx, type Side } from "./rooms";
 
@@ -296,8 +297,10 @@ export function planBuilding(b: BuildingData): BuildingPlan {
   const shell0 = shellOf(b, 0);
   const quad = shell0.length === 4 ? new Frame(longFirst(shell0)) : b.footprint.length === 4 ? new Frame(longFirst(b.footprint)) : null;
   const shells = Array.from({ length: n }, (_, f) => (f === 0 ? shell0 : shellOf(b, f)));
-  const house = b.style === "suburban-house";
-  const residential = house || b.style === "apartment" || b.style === "brick-midrise";
+  const kind = planKind(b.style);
+  const house = kind === "house";
+  const flats = kind === "apartments";
+  const residential = house || flats;
   const plan: BuildingPlan = {
     floors: [],
     stair: null,
@@ -328,7 +331,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
       const oy = Math.min(V, up.y1) - 0.3 - 2.0;
       candidates.push({ ox: xs + run, oy, rx: -1, ry: 0, ax: 0, ay: 1, run, width: 2.0 });
       candidates.push({ ox: Math.min(U, up.x1) - 0.4, oy, rx: -1, ry: 0, ax: 0, ay: 1, run, width: 2.0 });
-    } else if (b.style === "apartment" || b.style === "brick-midrise") {
+    } else if (flats) {
       const run = Math.min(5.2, V / 2 - 0.9 - 0.6);
       if (run >= 3 && U > 8) for (const fx of [0.5, 0.3, 0.7, 0.15, 0.85]) candidates.push({ ox: U * fx - 1.4, oy: V / 2 + 0.9, rx: 0, ry: 1, ax: 1, ay: 0, run, width: 2.8 });
     } else if (U > 8 && V > 8) {
@@ -456,7 +459,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
           } else furnish(c, "bedroom", [xb, y0, x1, V]);
         } else furnish(c, "bedroom", [x0, y0, x1, V]);
       }
-    } else if (b.style === "apartment" || b.style === "brick-midrise") {
+    } else if (flats) {
       if (f === 0) groundFloor(c, U, V, "lobby");
       else {
         const c0 = V / 2 - 0.9;
@@ -508,7 +511,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
         }
         fb.room(0, c0, U, c1, "hall", floorFin.wood);
       }
-    } else if (b.style === "industrial") {
+    } else if (kind === "industrial") {
       // A small office in one corner of the shed.
       const ow = Math.min(8, U * 0.25), od = Math.min(6, V * 0.35);
       const [ox0, ox1] = front === "e" ? [U - ow, U] : [0, ow];
@@ -519,7 +522,7 @@ export function planBuilding(b: BuildingData): BuildingPlan {
         fb.occupied.push([ox0, 0, ox1, od + 0.5]);
       }
       furnish(c, "warehouse", [0, 0, U, V]);
-    } else if (b.style === "civic") {
+    } else if (kind === "civic") {
       furnish(c, "lobby", [0, 0, U, V]);
       grid(c, "bench-seat", [0, 0, U, V], 5, 6, 4, 0, 0.3);
     } else {

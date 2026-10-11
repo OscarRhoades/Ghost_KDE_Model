@@ -37,6 +37,7 @@ export const SWATCH = {
   roof: hex("#b3b4b2"),
   roofDark: hex("#3e4246"),
   green: hex("#7fa46a"),
+  solar: hex("#34445e"),
   door: hex("#2e2a27"),
 };
 

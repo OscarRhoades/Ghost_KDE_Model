@@ -106,13 +106,26 @@ export function placeStreetscape(world: World): Placement[] {
     };
     const half = r.width / 2;
     const seed = Math.round(path[0][0] * 7 + path[0][2] * 13);
-    const place = (kind: string, t: number, side: number, offset: number, mode: "road" | "along", optional: boolean) => {
+    const place = (kind: string, t: number, side: number, offset: number, mode: "road" | "along" | "travel", optional: boolean, lift = CURB) => {
       const p = at(t);
       const x = p.x + p.nx * side * offset;
       const z = p.z + p.nz * side * offset;
-      const rot = mode === "road" ? facing(-p.nx * side, -p.nz * side) : Math.atan2(-p.tz, p.tx);
-      add(kind, x, z, rot, CURB, optional);
+      const rot = mode === "road" ? facing(-p.nx * side, -p.nz * side) : mode === "travel" ? facing(p.tx * side, p.tz * side) : Math.atan2(-p.tz, p.tx);
+      add(kind, x, z, rot, lift, optional);
     };
+    if (r.tram) {
+      // Overhead line poles between the tracks, stops at the curb, and the odd tram.
+      for (let t = trimA + 6; t < L - trimB - 2; t += spacing(35)) place("catenary-pole", t, 1, 0, "travel", false, 0.1);
+      if (L - trimA - trimB > 30 && hash(seed, 6) < 0.6) {
+        const mid = (trimA + L - trimB) / 2;
+        place("tram-stop", mid - 7, 1, half + 1.0, "road", false);
+        place("tram-stop", mid + 7, -1, half + 1.0, "road", false);
+      }
+      if (hash(seed, 7) < 0.45 && L - trimA - trimB > 30) {
+        const side = hash(seed, 8) < 0.5 ? 1 : -1;
+        place("tram", trimA + (L - trimA - trimB) * (0.3 + hash(seed, 9) * 0.4), side, 1.55, "travel", false, 0.12);
+      }
+    }
     const lampSpacing = spacing(r.kind === "avenue" ? 28 : 32);
     const lampTs: number[] = [];
     if (opts.lamps) {
@@ -145,7 +158,7 @@ export function placeStreetscape(world: World): Placement[] {
         for (let t = trimA + 30; t < L - trimB - 4; t += spacing(140)) place("bike-rack", t, 1, half + r.sidewalk * 0.5, "along", true);
         if (r.kind === "avenue") for (let t = trimA + 70; t < L - trimB - 4; t += spacing(260)) place("scooter-dock", t, -1, half + r.sidewalk * 0.5, "along", true);
       }
-      if (r.kind === "street" && opts.parking !== false) {
+      if (r.kind === "street" && opts.parking !== false && !r.tram) {
         // Parked cars along both curbs, facing the traffic on their side.
         for (const side of [1, -1]) {
           for (let t = trimA + 4; t < L - trimB - 3; t += 6.2) {
@@ -159,7 +172,7 @@ export function placeStreetscape(world: World): Placement[] {
           }
         }
       }
-      if (r.kind === "avenue" && L - trimA - trimB > 40) {
+      if (r.kind === "avenue" && !r.tram && L - trimA - trimB > 40) {
         // A bus stop on one side, mid-block.
         const t = (trimA + L - trimB) / 2;
         const side = hash(seed, 2) < 0.5 ? 1 : -1;

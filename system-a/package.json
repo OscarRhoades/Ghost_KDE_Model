@@ -5,7 +5,7 @@
   "description": "Modular engine for digital cities: .city.json format, ECS core, isometric + first-person viewer.",
   "type": "module",
   "scripts": {
-    "gen": "tsx generators/demo.ts",
+    "gen": "tsx generators/demo.ts && tsx generators/eco.ts",
     "predev": "npm run gen",
     "dev": "vite",
     "prebuild": "npm run gen",

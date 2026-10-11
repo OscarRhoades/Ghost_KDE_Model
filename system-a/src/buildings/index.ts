@@ -4,3 +4,4 @@
  */
 export * from "./styles";
 export { LANDMARKS } from "./landmarks";
+export { ECO_STYLES } from "./eco";

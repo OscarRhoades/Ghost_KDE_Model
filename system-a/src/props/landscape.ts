@@ -296,7 +296,7 @@ export function planLandscape(world: World): Landscape {
       const m = lerp(a, b, 0.5);
       const mi = insetPoint(poly, m, 2);
       if (distToStreetEdge(roads, mi[0], mi[1]) < 3) continue;
-      if (hash(seed, k) < 0.25) continue;
+      if (hash(seed, k) < (area(poly) < 400 ? 0.7 : 0.25)) continue; // narrow terrace gardens stay open
       hedgeLine(insetPoint(poly, a, 0.8), insetPoint(poly, b, 0.8), 0, (x, z) => inBuilding(x, z, 0.8) || distToStreetEdge(roads, x, z) < 1);
     }
     // Garden things in the back: away from the street and the house.

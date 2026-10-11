@@ -505,6 +505,117 @@ propCatalog.register("table-chairs", {
   },
 }, { tags: ["cafe", "plaza"] });
 
+// ---- Transit and eco ---------------------------------------------------------------------
+
+propCatalog.register("tram", {
+  solid: { hx: 1.35, hz: 15 },
+  glows: true,
+  build(p) {
+    const body = hex("#e9e4d6"), stripe = hex("#2f7a5a"), win = hex("#3d4b57");
+    for (const z0 of [-15, -4.7, 5.6]) {
+      const z1 = z0 + 9.4;
+      block(p.metal, -1.32, 0.35, z0, 1.32, 3.3, z1, body);
+      block(p.glass, -1.34, 1.15, z0 + 0.4, 1.34, 2.45, z1 - 0.4, win);
+      block(p.metal, -1.35, 0.6, z0, 1.35, 1.0, z1, stripe);
+      block(p.matte, -1.0, 3.3, z0 + 1, 1.0, 3.55, z1 - 1, hex("#9aa0a6"));
+    }
+    // Pantograph and the lit destination sign.
+    block(p.metal, -0.6, 3.55, -1, 0.6, 3.6, 1, STEEL);
+    block(p.metal, -0.05, 3.6, -0.05, 0.05, 5.4, 0.05, STEEL);
+    block(p.glow, -0.8, 2.6, 15, 0.8, 3.0, 15.05, hex("#ffb84a"));
+    block(p.glow, -0.8, 2.6, -15.05, 0.8, 3.0, -15, hex("#ffb84a"));
+  },
+}, { tags: ["transit"] });
+
+propCatalog.register("catenary-pole", {
+  solid: { r: 0.15 },
+  build(p) {
+    cylinder(p.metal, 0, 0, 0.14, 0.1, 0, 6.6, STEEL);
+    block(p.metal, -2.4, 6.2, -0.04, 2.4, 6.28, 0.04, STEEL);
+    for (const x of [-1.55, 1.55]) block(p.metal, x - 0.02, 5.6, -0.02, x + 0.02, 6.2, 0.02, STEEL);
+  },
+}, { tags: ["transit"] });
+
+propCatalog.register("tram-stop", {
+  solid: { hx: 2.6, hz: 0.6 },
+  glows: true,
+  light: { x: 0, z: 0.3, r: 4 },
+  build(p) {
+    const glass = hex("#a9c3cf");
+    block(p.matte, -6, 0, -0.9, 6, 0.12, 1.0, hex("#c9c4ba"));
+    for (const x of [-2.6, 2.6]) block(p.metal, x - 0.05, 0, -0.6, x + 0.05, 2.6, -0.5, STEEL);
+    block(p.glass, -2.6, 0.2, -0.62, 2.6, 2.45, -0.58, glass);
+    block(p.metal, -2.9, 2.6, -0.8, 2.9, 2.72, 0.9, hex("#2f7a5a"));
+    p.glass.quadFacing([-2.8, 2.73, -0.7], [2.8, 2.73, -0.7], [2.8, 2.73, 0.8], [-2.8, 2.73, 0.8], [0, 1, 0], SOLAR);
+    block(p.matte, -2.0, 0.45, -0.55, 2.0, 0.5, -0.25, TIMBER);
+    block(p.glow, 3.4, 2.0, -0.05, 4.0, 2.6, 0.05, hex("#2f7a5a"));
+    block(p.metal, 3.66, 0, -0.03, 3.74, 2.0, 0.03, STEEL);
+  },
+}, { tags: ["transit"] });
+
+const SOLAR = hex("#25324a");
+
+propCatalog.register("solar-canopy", {
+  solid: { hx: 0.2, hz: 0.2 },
+  build(p) {
+    for (const x of [-4, 4]) block(p.metal, x - 0.12, 0, -0.12, x + 0.12, 3.2, 0.12, STEEL);
+    block(p.metal, -5, 3.2, -0.15, 5, 3.35, 0.15, STEEL);
+    p.glass.quadFacing([-5.5, 3.0, -2.6], [5.5, 3.0, -2.6], [5.5, 3.7, 2.6], [-5.5, 3.7, 2.6], [0, 1, 0], SOLAR);
+    p.metal.quadFacing([-5.5, 3.0, -2.6], [5.5, 3.0, -2.6], [5.5, 3.7, 2.6], [-5.5, 3.7, 2.6], [0, -1, 0], hex("#9aa0a6"));
+  },
+}, { tags: ["eco"] });
+
+propCatalog.register("wind-turbine", {
+  solid: { r: 0.4 },
+  build(p) {
+    const white = hex("#eef0f0");
+    cylinder(p.metal, 0, 0, 0.45, 0.22, 0, 18, white, 10);
+    block(p.metal, -0.35, 17.6, -0.6, 0.35, 18.4, 1.0, white);
+    // Three blades in the plane facing +z.
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2 + 0.3;
+      const tip: V3 = [Math.cos(a) * 7, 18 + Math.sin(a) * 7, 1.05];
+      const side: V3 = [-Math.sin(a) * 0.35, Math.cos(a) * 0.35, 0];
+      p.matte.quadFacing([side[0], 18 + side[1], 1.05], [-side[0], 18 - side[1], 1.05], [tip[0] - side[0] * 0.3, tip[1] - side[1] * 0.3, 1.05], [tip[0] + side[0] * 0.3, tip[1] + side[1] * 0.3, 1.05], [0, 0, 1], white);
+      p.matte.quadFacing([side[0], 18 + side[1], 1.05], [-side[0], 18 - side[1], 1.05], [tip[0] - side[0] * 0.3, tip[1] - side[1] * 0.3, 1.05], [tip[0] + side[0] * 0.3, tip[1] + side[1] * 0.3, 1.05], [0, 0, -1], white);
+    }
+  },
+}, { tags: ["eco"] });
+
+propCatalog.register("veg-bed", {
+  solid: { hx: 1.3, hz: 0.65 },
+  build(p) {
+    block(p.matte, -1.3, 0, -0.65, 1.3, 0.45, 0.65, TIMBER);
+    block(p.matte, -1.2, 0.45, -0.55, 1.2, 0.5, 0.55, hex("#5a4632"));
+    const greens = ["#6f9e4f", "#8fbf5a", "#557f3e", "#a7c95f"].map(hex);
+    for (let k = 0; k < 6; k++) blob(p.matte, -0.85 + (k % 3) * 0.85, 0.65, -0.25 + Math.floor(k / 3) * 0.5, 0.32, 0.22, 0.25, greens[k % 4], k + 20);
+  },
+}, { tags: ["eco", "garden"] });
+
+propCatalog.register("greenhouse", {
+  solid: { hx: 2, hz: 3 },
+  build(p) {
+    const glass = hex("#cfe3e8");
+    block(p.matte, -2, 0, -3, 2, 0.4, 3, hex("#d2cfc8"));
+    block(p.glass, -2, 0.4, -3, 2, 2.2, 3, glass);
+    p.glass.quadFacing([-2, 2.2, -3], [0, 3.2, -3], [0, 3.2, 3], [-2, 2.2, 3], [-1, 2, 0], glass);
+    p.glass.quadFacing([2, 2.2, -3], [0, 3.2, -3], [0, 3.2, 3], [2, 2.2, 3], [1, 2, 0], glass);
+    for (const z of [-3, -1, 1, 3]) block(p.metal, -2.02, 0.4, z - 0.03, 2.02, 2.25, z + 0.03, hex("#eef0f0"));
+  },
+}, { tags: ["eco", "garden"] });
+
+propCatalog.register("bike-share", {
+  solid: { hx: 3, hz: 0.5 },
+  build(p) {
+    block(p.metal, -3, 0, -0.08, 3, 0.9, 0.08, hex("#2f7a5a"));
+    for (let k = 0; k < 7; k++) {
+      const x = -2.6 + k * 0.85;
+      block(p.matte, x - 0.03, 0.05, -0.9, x + 0.03, 0.75, 0.6, hex("#2f3439"));
+      block(p.metal, x - 0.04, 0.55, -0.3, x + 0.04, 0.62, 0.3, hex("#d9e34a"));
+    }
+  },
+}, { tags: ["eco", "street"] });
+
 // ---- Templates -------------------------------------------------------------------------
 
 export interface PropTemplate {

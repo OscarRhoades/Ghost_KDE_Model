@@ -27,6 +27,8 @@ export interface RoadEdgeData {
   via: [number, number][];
   /** Width/sidewalk as written in the file, to round-trip defaults faithfully. */
   explicit: { width?: number; sidewalk?: number };
+  tram?: boolean;
+  bridge?: boolean;
 }
 export const RoadEdge = defineComponent<RoadEdgeData>("RoadEdge");
 

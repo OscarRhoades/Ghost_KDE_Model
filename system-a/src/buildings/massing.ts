@@ -256,6 +256,11 @@ const STYLE_SHAPES: Record<string, [string, number][]> = {
   civic: [["box", 1]],
 };
 
+/** Let a style choose from the shape catalog: [shape name, weight] pairs. */
+export function registerStyleShapes(style: string, shapes: [string, number][]): void {
+  STYLE_SHAPES[style] = shapes;
+}
+
 const cache = new WeakMap<BuildingData, Massing>();
 
 /** The volumes of a building. Deterministic; cached per building. */

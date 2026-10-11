@@ -191,3 +191,61 @@ roofCatalog.register("sawtooth", {
     }
   },
 });
+
+/** Rows of tilted solar panels across a quad roof, between `v0` and `v1` of its depth. */
+function solarRows(p: Parts, q: P2[], y: number, v0 = 0.1, v1 = 0.9) {
+  const [a, b, , d] = q;
+  const depth = Math.hypot(d[0] - a[0], d[1] - a[1]);
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const P = (u: number, v: number, h: number): V3 => {
+    const x = a[0] + ((b[0] - a[0]) * u) / len + ((d[0] - a[0]) * v) / depth;
+    const z = a[1] + ((b[1] - a[1]) * u) / len + ((d[1] - a[1]) * v) / depth;
+    return [x, h, z];
+  };
+  const panelC = SWATCH.solar;
+  const frame = SWATCH.charcoal[0];
+  for (let v = depth * v0; v + 1.7 < depth * v1; v += 2.6) {
+    const u0 = Math.min(1.5, len * 0.1), u1 = len - u0;
+    if (u1 - u0 < 1.5) continue;
+    p.glass.quadFacing(P(u0, v, y + 0.35), P(u1, v, y + 0.35), P(u1, v + 1.7, y + 1.05), P(u0, v + 1.7, y + 1.05), [0, 1, 0], panelC);
+    p.metal.quadFacing(P(u0, v, y + 0.35), P(u1, v, y + 0.35), P(u1, v + 1.7, y + 1.05), P(u0, v + 1.7, y + 1.05), [0, -1, 0], frame);
+    p.metal.quadFacing(P(u0, v + 1.7, y), P(u1, v + 1.7, y), P(u1, v + 1.7, y + 1.05), P(u0, v + 1.7, y + 1.05), [0, 0, 1], frame);
+  }
+}
+
+roofCatalog.register("solar", {
+  quadOnly: true,
+  draw(p, poly, y, ctx) {
+    cap(p.matte, poly, y, ctx.pal.roof);
+    parapet(p, poly, y, ctx.pal.trim, 0.5);
+    solarRows(p, longFirst(poly), y);
+  },
+});
+
+roofCatalog.register("solar-green", {
+  quadOnly: true,
+  draw(p, poly, y, ctx) {
+    cap(p.matte, poly, y, ctx.pal.roof);
+    cap(p.matte, scaled(poly, 0.9), y + 0.08, SWATCH.green);
+    parapet(p, poly, y, ctx.pal.trim, 0.6);
+    solarRows(p, longFirst(poly), y + 0.08, 0.15, 0.6);
+  },
+});
+
+/** Mono-pitch roof covered in solar panels on its slope. */
+roofCatalog.register("solar-pitch", {
+  quadOnly: true,
+  draw(p, poly, y, ctx) {
+    const q = longFirst(poly);
+    const span = Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]);
+    const rise = span * 0.25;
+    slopedPlane(p.matte, q, y, y + rise, SWATCH.roofDark, ctx.pal.wall);
+    const [a, b, c, d] = q;
+    const lerp = (m: P2, n: P2, t: number): P2 => [m[0] + (n[0] - m[0]) * t, m[1] + (n[1] - m[1]) * t];
+    const k0 = 0.12, k1 = 0.88;
+    const pa = lerp(lerp(a, b, k0), lerp(d, c, k0), 0.08), pb = lerp(lerp(a, b, k1), lerp(d, c, k1), 0.08);
+    const pc = lerp(lerp(a, b, k1), lerp(d, c, k1), 0.7), pd = lerp(lerp(a, b, k0), lerp(d, c, k0), 0.7);
+    const h = (t: number) => y + rise * t + 0.06;
+    p.glass.quadFacing([pa[0], h(0.08), pa[1]], [pb[0], h(0.08), pb[1]], [pc[0], h(0.7), pc[1]], [pd[0], h(0.7), pd[1]], [0, 1, 0], SWATCH.solar);
+  },
+});

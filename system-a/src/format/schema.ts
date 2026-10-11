@@ -69,6 +69,10 @@ export const RoadEdge = z.object({
   sidewalk: finite.nonnegative().optional(),
   /** Intermediate points between `a` and `b` for curved roads. */
   via: z.array(Vec2).optional(),
+  /** Tram tracks run down the middle. */
+  tram: z.boolean().optional(),
+  /** Spans water or a gap: the terrain under it is left alone. */
+  bridge: z.boolean().optional(),
 });
 export type RoadEdge = z.infer<typeof RoadEdge>;
 

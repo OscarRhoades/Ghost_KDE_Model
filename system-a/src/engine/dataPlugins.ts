@@ -98,6 +98,8 @@ export function roadsData(): Plugin {
               sidewalk: r.sidewalk ?? d.sidewalk,
               via: (r.via ?? []).map((p) => [p[0], p[1]] as [number, number]),
               explicit: { width: r.width, sidewalk: r.sidewalk },
+              ...(r.tram !== undefined ? { tram: r.tram } : {}),
+              ...(r.bridge !== undefined ? { bridge: r.bridge } : {}),
             });
             index.set(indexKey("road-edge", r.id), e);
           }
@@ -117,6 +119,8 @@ export function roadsData(): Plugin {
               ...(r.explicit.width !== undefined ? { width: r.explicit.width } : {}),
               ...(r.explicit.sidewalk !== undefined ? { sidewalk: r.explicit.sidewalk } : {}),
               ...(r.via.length ? { via: r.via.map((p) => [p[0], p[1]] as [number, number]) } : {}),
+              ...(r.tram !== undefined ? { tram: r.tram } : {}),
+              ...(r.bridge !== undefined ? { bridge: r.bridge } : {}),
             });
           }
         },
@@ -283,7 +287,11 @@ export function terrainConform(): Plugin {
         name: "conform",
         order: LoadOrder.conform,
         load(world) {
-          const { hf, surface } = world.resource(TerrainR);
+          const { hf, surface, waterLevel } = world.resource(TerrainR);
+          // Ground well under the water (sea, rivers, canals) is never filled in by
+          // the blending around pads and roads: remember it and put it back after.
+          const deep: [number, number][] = [];
+          if (waterLevel !== undefined) for (let k = 0; k < hf.data.length; k++) if (hf.data[k] < waterLevel - 0.5) deep.push([k, hf.data[k]]);
           for (const e of world.query(Parcel)) {
             const p = world.read(e, Parcel);
             if (p.zone === "park") {
@@ -298,6 +306,7 @@ export function terrainConform(): Plugin {
           }
           for (const e of world.query(RoadEdge)) {
             const r = world.read(e, RoadEdge);
+            if (r.bridge) continue; // spans the water; the banks are graded by the junctions
             const path = edgePath(world, r);
             const half = r.width / 2 + r.sidewalk;
             for (let k = 1; k < path.length; k++) gradeSegment(hf, path[k - 1], path[k], half, ROAD_BLEND, surface);
@@ -312,6 +321,10 @@ export function terrainConform(): Plugin {
           for (const [n, rad] of radius) {
             const { x, y, z } = world.read(n, RoadNode);
             gradeSegment(hf, [x, y, z], [x, y, z], rad, ROAD_BLEND, surface);
+          }
+          for (const [k, h] of deep) {
+            if (hf.data[k] > h) hf.data[k] = h;
+            surface[k] = Surface.natural;
           }
         },
       });
