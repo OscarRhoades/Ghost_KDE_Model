@@ -11,7 +11,7 @@ import type { Plugin } from "../engine/engine";
 import { centroid } from "../geom/polygon";
 import { addToScene, SceneR } from "../render/renderPlugin";
 import { newParts, type Parts, type Slot } from "./kit";
-import { buildBuilding } from "./styles";
+import { buildBuilding } from "./index";
 
 /** Tile edge length in meters. */
 export const TILE = 320;

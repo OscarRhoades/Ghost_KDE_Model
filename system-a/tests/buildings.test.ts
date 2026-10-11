@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { edgesOf, newParts, type Parts } from "../src/buildings/kit";
-import { buildBuilding, styleFor, styleNames } from "../src/buildings/styles";
+import { buildBuilding, styleFor, styleNames } from "../src/buildings/index";
 import type { BuildingData } from "../src/engine/components";
 
 const rect = (w: number, d: number) => [[0, 0], [w, 0], [w, d], [0, d]] as const;

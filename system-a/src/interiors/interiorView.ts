@@ -157,7 +157,7 @@ export function buildInterior(b: BuildingData, plan: BuildingPlan, f0: number, f
     const holeBelow = plan.stair && f > 0 ? [stairHole(plan.stair)] : [];
     const holeAbove = plan.stair && f < n - 1 ? [stairHole(plan.stair)] : [];
     cap(out.matte, fp.shell, fp.y, floorC, false, holeBelow);
-    cap(out.matte, fp.shell, fp.ceiling, ceilingC, true, holeAbove);
+    if (!(plan.openCeiling && f === n - 1)) cap(out.matte, fp.shell, fp.ceiling, ceilingC, true, holeAbove);
     shellInside(out, plan, fp, b.entrance, wallC, glassC);
     for (const w of fp.walls) wallBox(out.matte, w.a, w.b, w.y0, w.y1, wallC);
     for (const it of fp.furniture) solid(out.matte, it.poly, it.y0, it.y1, hexColor(it.color));
@@ -252,7 +252,8 @@ export function interiorView(): Plugin {
             const fp = plan.floors[walker.floor];
             const room = fp.rooms.find((r) => pointInPolygon(walker.x, walker.z, r.poly));
             const level = walker.floor === 0 ? "Ground floor" : `Floor ${walker.floor}`;
-            label = room ? `${ROOM_NAMES[room.kind] ?? room.kind} · ${level}` : level;
+            const name = plan.roomLabel ?? (room ? (ROOM_NAMES[room.kind] ?? room.kind) : "");
+            label = name ? `${name} · ${level}` : level;
           }
           world.setResource(LocationR, { label });
         },

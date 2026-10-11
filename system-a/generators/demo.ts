@@ -144,19 +144,58 @@ export function generateDemo({ seed, size, cell }: DemoOptions): CityFileInput {
     });
   };
 
+  /** The buildable block inside the streets around grid cell (ix, iz), if any. */
+  const blockAt = (ix: number, iz: number): P2[] | null => {
+    const c = [grid[ix][iz], grid[ix + 1][iz], grid[ix + 1][iz + 1], grid[ix][iz + 1]];
+    if (c.some((v) => !v)) return null;
+    const [a, b, cc, d] = c as GridNode[];
+    const sides = [edgeBetween(a, b), edgeBetween(b, cc), edgeBetween(cc, d), edgeBetween(d, a)];
+    if (sides.some((s) => !s)) return null;
+    const setback = sides.map((s) => {
+      const r = ROAD_DEFAULTS[s!.kind];
+      return r.width / 2 + r.sidewalk + 0.5;
+    });
+    const block = insetConvex([a.p, b.p, cc.p, d.p], setback);
+    return block && allDry(block) ? block : null;
+  };
+
+  // Landmarks: each takes a whole block in its preferred distance band.
+  const LANDMARK_RULES: { style: string; band: [number, number]; min: number; floors: number; fh: number; zone: Zone }[] = [
+    { style: "supertall", band: [110, 360], min: 55, floors: 72, fh: 3.8, zone: "commercial" },
+    { style: "museum", band: [260, 620], min: 60, floors: 3, fh: 5, zone: "civic" },
+    { style: "concert-hall", band: [300, 700], min: 60, floors: 5, fh: 5, zone: "civic" },
+    { style: "library", band: [350, 800], min: 50, floors: 4, fh: 4.2, zone: "civic" },
+    { style: "market-hall", band: [480, 950], min: 55, floors: 1, fh: 7, zone: "commercial" },
+    { style: "station", band: [520, 1050], min: 70, floors: 4, fh: 4, zone: "civic" },
+    { style: "stadium", band: [900, 1600], min: 120, floors: 5, fh: 4, zone: "civic" },
+    { style: "chapel", band: [950, 1500], min: 40, floors: 1, fh: 8, zone: "civic" },
+  ];
+  const landmarkAt = new Map<string, (typeof LANDMARK_RULES)[number]>();
+  {
+    const candidates: { key: string; dist: number; minDim: number }[] = [];
+    for (let ix = 0; ix + 1 < xs.length; ix++) {
+      for (let iz = 0; iz + 1 < zs.length; iz++) {
+        if ((ix === cx0 && iz === cz0) || (ix === cx0 + 2 && iz === cz0 - 1)) continue;
+        const block = blockAt(ix, iz);
+        if (!block) continue;
+        const [bx, bz] = centroid(block);
+        const minDim = Math.min(Math.hypot(block[1][0] - block[0][0], block[1][1] - block[0][1]), Math.hypot(block[3][0] - block[0][0], block[3][1] - block[0][1]));
+        candidates.push({ key: `${ix},${iz}`, dist: distC(bx, bz), minDim });
+      }
+    }
+    for (const rule of LANDMARK_RULES) {
+      const mid = (rule.band[0] + rule.band[1]) / 2;
+      const pick = candidates
+        .filter((c) => !landmarkAt.has(c.key) && c.dist >= rule.band[0] && c.dist <= rule.band[1] && c.minDim >= rule.min)
+        .sort((a, b) => Math.abs(a.dist - mid) - Math.abs(b.dist - mid))[0];
+      if (pick) landmarkAt.set(pick.key, rule);
+    }
+  }
+
   for (let ix = 0; ix + 1 < xs.length; ix++) {
     for (let iz = 0; iz + 1 < zs.length; iz++) {
-      const c = [grid[ix][iz], grid[ix + 1][iz], grid[ix + 1][iz + 1], grid[ix][iz + 1]];
-      if (c.some((v) => !v)) continue;
-      const [a, b, cc, d] = c as GridNode[];
-      const sides = [edgeBetween(a, b), edgeBetween(b, cc), edgeBetween(cc, d), edgeBetween(d, a)];
-      if (sides.some((s) => !s)) continue;
-      const setback = sides.map((s) => {
-        const r = ROAD_DEFAULTS[s!.kind];
-        return r.width / 2 + r.sidewalk + 0.5;
-      });
-      const block = insetConvex([a.p, b.p, cc.p, d.p], setback);
-      if (!block || !allDry(block)) continue;
+      const block = blockAt(ix, iz);
+      if (!block) continue;
 
       const [bx, bz] = centroid(block);
       const dist = distC(bx, bz);
@@ -169,6 +208,13 @@ export function generateDemo({ seed, size, cell }: DemoOptions): CityFileInput {
         const pid = addParcel(block, "plaza");
         const hall = insetConvex(block, 26);
         if (hall) addBuilding(pid, hall, 4, "civic", "hip", 4.5);
+        continue;
+      }
+      const landmark = landmarkAt.get(`${ix},${iz}`);
+      if (landmark) {
+        const pid = addParcel(block, landmark.zone);
+        const lot = insetConvex(block, 3);
+        if (lot) addBuilding(pid, lot, landmark.floors, landmark.style, "flat", landmark.fh);
         continue;
       }
       if ((dist > 300 && rng() < 0.06) || (ix === cx0 + 2 && iz === cz0 - 1)) {

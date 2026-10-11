@@ -11,6 +11,7 @@ import { Catalog } from "../catalog/registry";
 import type { BuildingData } from "../engine/components";
 import { area, centroid, insetConvex, quadPoint, rotated, type P2 } from "../geom/polygon";
 import { rngFor, scaled, type Rng } from "./kit";
+import { specialInfo } from "./special";
 
 export type VolumeRole = "main" | "wing" | "podium" | "tower" | "upper";
 
@@ -250,6 +251,8 @@ const STYLE_SHAPES: Record<string, [string, number][]> = {
   "brick-midrise": [["box", 2], ["l-plan", 1], ["u-plan", 0.6], ["courtyard", 0.6], ["notched", 0.8], ["terrace-steps", 0.6]],
   "suburban-house": [["house-modern", 2], ["house-l", 1], ["box", 0.5]],
   industrial: [["box", 1]],
+  supertall: [["twisted", 1.2], ["tapered", 1], ["stepped", 0.6]],
+  library: [["terrace-steps", 1], ["box", 0.5]],
   civic: [["box", 1]],
 };
 
@@ -280,7 +283,8 @@ export function massingOf(b: BuildingData): Massing {
       }
     }
   }
-  const volumes = q ? shapeCatalog.require(name).build(b, q, rng) : [all(b)];
+  const special = specialInfo.get(b.style)?.shell;
+  const volumes = special ? [{ ...all(b), poly: special(b) }] : q ? shapeCatalog.require(name).build(b, q, rng) : [all(b)];
   const m = { shape: name, volumes };
   cache.set(b, m);
   return m;
@@ -304,11 +308,15 @@ export const volumesAt = (m: Massing, f: number) => m.volumes.filter((v) => f >=
 
 /** Floors you can walk on: industrial halls and the town hall lobby are one tall space. */
 export function interiorFloors(b: BuildingData): number {
+  const sp = specialInfo.get(b.style)?.floors;
+  if (sp) return sp(b);
   return b.style === "industrial" || b.style === "civic" ? 1 : b.floors;
 }
 
 /** Height of one walkable floor. */
 export function interiorFloorHeight(b: BuildingData): number {
+  const sp = specialInfo.get(b.style)?.floorHeight;
+  if (sp) return sp(b);
   if (b.style === "industrial") return b.floors * b.floorHeight;
   if (b.style === "civic") return b.floorHeight * 1.4; // double-height lobby, matching the facade
   return b.floorHeight;
@@ -328,7 +336,8 @@ export function shellOf(b: BuildingData, f: number): P2[] {
 /** Ground-level plans that block walking (every volume touching the ground). */
 export function groundPlans(b: BuildingData): P2[][] {
   if (b.style === "civic") return [shellOf(b, 0)];
-  return massingOf(b).volumes.filter((v) => v.f0 === 0).map((v) => planAt(v, 0));
+  const extra = specialInfo.get(b.style)?.solids?.(b) ?? [];
+  return [...massingOf(b).volumes.filter((v) => v.f0 === 0).map((v) => planAt(v, 0)), ...extra];
 }
 
 /** Total plan area of a building's ground floor (for sanity checks). */

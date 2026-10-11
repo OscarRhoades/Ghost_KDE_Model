@@ -11,6 +11,8 @@
  */
 import { rngFor } from "../buildings/kit";
 import { interiorFloorHeight, interiorFloors, longFirst, shellOf } from "../buildings/massing";
+import { specialInfo } from "../buildings/special";
+import "../buildings/index"; // registers landmark interiors
 import type { BuildingData } from "../engine/components";
 import { clipSegment, pointInPolygon, quadPoint, type P2 } from "../geom/polygon";
 
@@ -69,6 +71,10 @@ export interface BuildingPlan {
   glazing: Glazing;
   floorColor: number;
   wallColor: number;
+  /** Leave the top floor without a flat ceiling (landmark roofs are visible). */
+  openCeiling: boolean;
+  /** HUD label override for every room. */
+  roomLabel?: string;
 }
 
 /** Slab thickness between a ceiling and the floor above. */
@@ -269,7 +275,14 @@ export function planBuilding(b: BuildingData): BuildingPlan {
     glazing: b.style === "glass-tower" || b.style === "office" || b.style === "civic" || b.style === "default" ? "full" : b.style === "industrial" ? "solid" : "punched",
     floorColor: residential ? 0xc49a6c : b.style === "civic" ? 0xd9d3c6 : 0xb8b5ae,
     wallColor: 0xf0eee9,
+    openCeiling: false,
   };
+  const special = specialInfo.get(b.style);
+  if (special) {
+    plan.openCeiling = !!special.openCeiling;
+    plan.roomLabel = special.room;
+    if (special.glazing) plan.glazing = special.glazing;
+  }
 
   // ---- Stair placement (local frame) ----
   let ls: LocalStair | null = null;
@@ -321,6 +334,24 @@ export function planBuilding(b: BuildingData): BuildingPlan {
       continue;
     }
     const { U, V } = quad;
+
+    if (special?.furnish) {
+      special.furnish(
+        {
+          U,
+          V,
+          box: (x0, y0, x1, y1, h0, h1, c) => fb.box(x0, y0, x1, y1, h0, h1, c),
+          wall: (x0, y0, x1, y1, doors, h) => fb.wall(x0, y0, x1, y1, doors, h),
+          room: (x0, y0, x1, y1, kind) => fb.room(x0, y0, x1, y1, kind as RoomKind),
+          local: (p) => quad.local(p),
+          stair: sr,
+        },
+        f,
+        b,
+      );
+      plan.floors.push(fb.finish(f));
+      continue;
+    }
 
     if (house) {
       const up = f >= 1 ? quad.bounds(shell) : null;

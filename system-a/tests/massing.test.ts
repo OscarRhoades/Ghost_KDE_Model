@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { edgesOf } from "../src/buildings/kit";
 import { groundPlans, massingOf, planAt, quadOf, shapeCatalog, shellOf } from "../src/buildings/massing";
-import { lookOf } from "../src/buildings/styles";
+import { lookOf } from "../src/buildings/index";
 import type { BuildingData } from "../src/engine/components";
 import { area, pointInPolygon, signedArea } from "../src/geom/polygon";
 import { planBuilding } from "../src/interiors/plan";
@@ -74,7 +74,7 @@ describe("massing shapes", () => {
 
 import { facadeCatalog } from "../src/buildings/facades";
 import { newParts } from "../src/buildings/kit";
-import { buildBuilding } from "../src/buildings/styles";
+import { buildBuilding } from "../src/buildings/index";
 
 describe("facade systems", () => {
   for (const name of facadeCatalog.names()) {
@@ -120,4 +120,29 @@ describe("ground-floor uses", () => {
     expect(new Set(uses).size).toBeGreaterThan(4);
     expect(groundUseOf(building("suburban-house", 2, undefined, 12, 9))).toBe("none");
   });
+});
+
+import { LANDMARKS } from "../src/buildings/index";
+
+describe("landmarks", () => {
+  for (const style of LANDMARKS) {
+    it(`${style} builds detail, massing and an interior`, () => {
+      const b = building(style, style === "supertall" ? 70 : 4, undefined, 120, 110);
+      b.entrance = { x: 160, z: 100, tx: 1, tz: 0, width: 2.4, height: 2.8, y: 5 };
+      for (const lod of ["detail", "massing"] as const) {
+        const p = newParts();
+        buildBuilding(p, b, lod);
+        let tris = 0;
+        for (const mb of Object.values(p)) {
+          tris += mb.triangleCount;
+          const pos = mb.build().getAttribute("position");
+          for (let k = 0; k < pos.count; k++) expect(Number.isFinite(pos.getY(k))).toBe(true);
+        }
+        expect(tris).toBeGreaterThan(lod === "detail" ? 40 : 6);
+      }
+      const plan = planBuilding(b);
+      expect(plan.floors.length).toBeGreaterThan(0);
+      for (const f of plan.floors) for (const it of f.furniture) for (const [x, z] of it.poly) expect(pointInPolygon(x, z, f.shell)).toBe(true);
+    });
+  }
 });
