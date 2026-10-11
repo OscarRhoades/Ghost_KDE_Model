@@ -1,3 +1,4 @@
 node_modules/
 dist/
 public/cities/demo.city.json
+public/cities/eco.city.json
