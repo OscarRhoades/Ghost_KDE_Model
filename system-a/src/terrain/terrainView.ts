@@ -1,4 +1,5 @@
 import { Color, Mesh, MeshStandardMaterial, PlaneGeometry } from "three";
+import { stylize, stylizeWater } from "../render/style";
 import { TerrainR } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { MeshBuilder, type V3 } from "../render/meshBuilder";
@@ -10,19 +11,21 @@ import type { Heightfield } from "./heightfield";
 const CHUNK = 64;
 
 const C = {
-  grass: new Color("#93c26c"),
-  grassDark: new Color("#8bbd66"),
-  rock: new Color("#a39a8c"),
-  sand: new Color("#e3d29d"),
-  seabed: new Color("#c4b385"),
-  pad: new Color("#d9d3c5"),
-  park: new Color("#74b65a"),
-  plaza: new Color("#e7e0cf"),
-  lawn: new Color("#9cc979"),
-  lawnDark: new Color("#93c171"),
-  road: new Color("#b9b5ad"),
-  earth: new Color("#8c7558"),
-  water: new Color("#5aa6d1"),
+  grass: new Color("#76b54c"),
+  grassDark: new Color("#5fa743"),
+  meadow: new Color("#b5c95a"),
+  rock: new Color("#a8957c"),
+  sand: new Color("#f0d9a0"),
+  seabed: new Color("#d6c08a"),
+  deep: new Color("#3f8f9e"),
+  pad: new Color("#e6dccb"),
+  park: new Color("#71b84b"),
+  plaza: new Color("#eadfca"),
+  lawn: new Color("#84c057"),
+  lawnDark: new Color("#74b84c"),
+  road: new Color("#c9bfae"),
+  earth: new Color("#8a6a4a"),
+  water: new Color("#3fb4d0"),
 };
 
 export function terrainView(): Plugin {
@@ -33,7 +36,7 @@ export function terrainView(): Plugin {
         name: "terrain-view",
         onLoad(world) {
           const t = world.resource(TerrainR);
-          const material = new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+          const material = stylize(new MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }), { edges: false, paint: 1.6, rim: 0.3 });
           const cellsX = t.hf.nx - 1;
           const cellsZ = t.hf.nz - 1;
           for (let cj = 0; cj < cellsZ; cj += CHUNK) {
@@ -58,7 +61,7 @@ export function terrainView(): Plugin {
             g.translate(t.hf.width / 2, t.waterLevel, t.hf.depth / 2);
             const water = new Mesh(
               g,
-              new MeshStandardMaterial({ color: C.water, roughness: 0.25, metalness: 0.05, transparent: true, opacity: 0.88 }),
+              stylizeWater(new MeshStandardMaterial({ color: C.water, roughness: 0.18, metalness: 0.0, transparent: true, opacity: 0.92, envMapIntensity: 0.6 })),
             );
             water.receiveShadow = true;
             water.name = "water";
@@ -77,30 +80,23 @@ function jitter(i: number, j: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-function faceColor(
-  surface: Uint8Array,
-  water: number | undefined,
-  idx: [number, number, number],
-  ys: [number, number, number],
-  normalY: number,
-  i: number,
-  j: number,
-): Color {
-  const s0 = surface[idx[0]], s1 = surface[idx[1]], s2 = surface[idx[2]];
-  // Majority surface of the three corners.
-  const s = s0 === s1 || s0 === s2 ? s0 : s1 === s2 ? s1 : s0;
+/** Color of the ground at one terrain sample, from its surface, height and slope. */
+function vertexColor(hf: Heightfield, surface: Uint8Array, water: number | undefined, i: number, j: number, n: V3, out: Color): Color {
+  const s = surface[hf.index(i, j)];
+  const y = hf.data[hf.index(i, j)];
+  const j1 = jitter(Math.floor(i / 3), Math.floor(j / 3));
   switch (s) {
-    case Surface.pad: return C.pad;
-    case Surface.plaza: return C.plaza;
-    case Surface.lawn: return jitter(i, j) > 0.5 ? C.lawn : C.lawnDark;
-    case Surface.road: return C.road;
-    case Surface.park: return C.park;
+    case Surface.pad: return out.copy(C.pad);
+    case Surface.plaza: return out.copy(C.plaza);
+    case Surface.lawn: return out.copy(C.lawn).lerp(C.lawnDark, j1);
+    case Surface.road: return out.copy(C.road);
+    case Surface.park: return out.copy(C.park).lerp(C.grassDark, j1 * 0.5);
   }
-  const maxY = Math.max(...ys);
-  if (water !== undefined && maxY < water) return C.seabed;
-  if (water !== undefined && Math.min(...ys) < water + 1.2) return C.sand;
-  if (normalY < 0.8) return C.rock;
-  return jitter(i, j) > 0.35 ? C.grass : C.grassDark;
+  if (water !== undefined && y < water - 0.3) return out.copy(C.seabed).lerp(C.deep, Math.min(1, (water - y) / 8));
+  if (water !== undefined && y < water + 1.4) return out.copy(C.sand);
+  // Grass in soft patches, drier higher up; steep ground shows rock.
+  out.copy(C.grass).lerp(C.grassDark, j1 * 0.6).lerp(C.meadow, Math.min(1, Math.max(0, (y - 40) / 120)));
+  return out.lerp(C.rock, Math.min(1, Math.max(0, (0.86 - n[1]) / 0.12)));
 }
 
 function buildChunk(
@@ -113,31 +109,29 @@ function buildChunk(
   j1: number,
 ) {
   const mb = new MeshBuilder();
-  const up: V3 = [0, 1, 0];
-  const v = (i: number, j: number): V3 => [i * hf.cellX, hf.data[hf.index(i, j)], j * hf.cellZ];
+  // Smooth shading: one normal and one color per terrain sample.
+  const w = i1 - i0 + 1;
+  const h = (ii: number, jj: number) => hf.sample(Math.min(hf.nx - 1, Math.max(0, ii)), Math.min(hf.nz - 1, Math.max(0, jj)));
+  const verts: { p: V3; n: V3; c: Color }[] = [];
+  for (let j = j0; j <= j1; j++) {
+    for (let i = i0; i <= i1; i++) {
+      const dx = (h(i + 1, j) - h(i - 1, j)) / (2 * hf.cellX);
+      const dz = (h(i, j + 1) - h(i, j - 1)) / (2 * hf.cellZ);
+      const l = Math.hypot(dx, 1, dz);
+      const n: V3 = [-dx / l, 1 / l, -dz / l];
+      verts.push({ p: [i * hf.cellX, h(i, j), j * hf.cellZ], n, c: vertexColor(hf, surface, water, i, j, n, new Color()) });
+    }
+  }
+  const at = (i: number, j: number) => verts[(j - j0) * w + (i - i0)];
   for (let j = j0; j < j1; j++) {
     for (let i = i0; i < i1; i++) {
-      const a = v(i, j), b = v(i + 1, j), c = v(i + 1, j + 1), d = v(i, j + 1);
-      const ia = hf.index(i, j), ib = hf.index(i + 1, j), ic = hf.index(i + 1, j + 1), id = hf.index(i, j + 1);
-      // Alternate the split diagonal for a less regular low-poly pattern.
-      const tris: [V3, V3, V3, [number, number, number]][] =
-        (i + j) % 2 === 0
-          ? [[a, b, c, [ia, ib, ic]], [a, c, d, [ia, ic, id]]]
-          : [[a, b, d, [ia, ib, id]], [b, c, d, [ib, ic, id]]];
-      for (const [p, q, r, idx] of tris) {
-        const ny = normalY(p, q, r);
-        mb.triFacing(p, q, r, up, faceColor(surface, water, idx, [p[1], q[1], r[1]], ny, i, j));
-      }
+      const a = at(i, j), b = at(i + 1, j), c = at(i + 1, j + 1), d = at(i, j + 1);
+      // Counter-clockwise seen from above.
+      mb.triSmooth(a.p, d.p, c.p, a.n, d.n, c.n, a.c, d.c, c.c);
+      mb.triSmooth(a.p, c.p, b.p, a.n, c.n, b.n, a.c, c.c, b.c);
     }
   }
   return mb.build();
-}
-
-function normalY(a: V3, b: V3, c: V3): number {
-  const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
-  const vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
-  const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-  return Math.abs(ny) / Math.hypot(nx, ny, nz);
 }
 
 /** Vertical walls around the map edge, like a cut-out diorama. */

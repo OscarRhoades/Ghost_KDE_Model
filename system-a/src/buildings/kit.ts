@@ -53,7 +53,7 @@ export function at(e: Edge, s: number, y: number, out = 0): V3 {
   return [e.a[0] + e.tx * s + e.nx * out, y, e.a[1] + e.tz * s + e.nz * out];
 }
 
-const normalOf = (e: Edge): V3 => [e.nx, 0, e.nz];
+export const normalOf = (e: Edge): V3 => [e.nx, 0, e.nz];
 
 /** A flat rectangle on the facade plane (offset `out`), facing outward. */
 export function panel(mb: MeshBuilder, e: Edge, s0: number, s1: number, y0: number, y1: number, out: number, c: Color) {

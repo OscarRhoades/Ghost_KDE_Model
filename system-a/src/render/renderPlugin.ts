@@ -19,7 +19,8 @@ import { detectTier, QualityR, savedTier, settingsFor } from "./quality";
 import { atmosFor, atmosFromUrl, AtmosR, type Atmos } from "./atmosphere";
 import { applyNight } from "./materials";
 import { PostFx } from "./postfx";
-import { createSky, SKY, type Sky } from "./sky";
+import { styleUniforms } from "./style";
+import { cloudUniforms, createSky, SKY, type Sky } from "./sky";
 
 export const SceneR = defineResource<Scene>("Scene");
 export const RendererR = defineResource<WebGLRenderer>("Renderer");
@@ -123,6 +124,8 @@ export function renderPlugin(opts: RenderOptions): Plugin {
         update(world) {
           const camera = world.getResource(ActiveCameraR);
           if (!camera) return;
+          styleUniforms.uTime.value = performance.now() / 1000;
+          cloudUniforms.uTime.value = styleUniforms.uTime.value;
           const q = world.resource(QualityR);
           if (q.version !== appliedQuality) {
             appliedQuality = q.version;
@@ -155,6 +158,13 @@ export function renderPlugin(opts: RenderOptions): Plugin {
             sunDir.copy(atmos.sunDir);
             world.resource(RendererR).toneMappingExposure = atmos.exposure;
             applyNight(world, atmos.night);
+            // Clouds take their light from the sky; cover follows the weather.
+            const bright = atmos.sky.horizon.clone().lerp(new Color(1, 1, 1), 0.65 * (1 - atmos.night));
+            cloudUniforms.uCloudColor.value.copy(bright);
+            cloudUniforms.uCloudShade.value.copy(atmos.sky.upper).lerp(atmos.sky.horizon, 0.3).multiplyScalar(0.85);
+            cloudUniforms.uCover.value = { clear: 0.42, overcast: 0.95, rain: 1.0, fog: 0.8, snow: 0.95 }[settings.weather];
+            styleUniforms.uRimColor.value.copy(atmos.hemiSky).lerp(new Color(1, 1, 1), 0.3);
+            styleUniforms.uRim.value = 0.22 * (1 - atmos.night * 0.6);
           }
           // Keep the shadow frustum fitted around what the camera is looking at.
           const focus = world.getResource(FocusR);

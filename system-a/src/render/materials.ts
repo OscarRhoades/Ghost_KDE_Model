@@ -5,6 +5,7 @@
 import { AdditiveBlending, CanvasTexture, Color, DoubleSide, MeshBasicMaterial, MeshStandardMaterial, type Material } from "three";
 import { defineResource, type World } from "../ecs/world";
 import type { Slot } from "../buildings/kit";
+import { stylize } from "./style";
 
 export type PartMaterials = Record<Slot, MeshStandardMaterial>;
 
@@ -33,10 +34,10 @@ export function partMaterials(world: World): PartMaterials {
         .replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += vColor.rgb * uNight * 1.6;");
     };
     m = {
-      matte: new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 }),
-      glass: new MeshStandardMaterial({ vertexColors: true, roughness: 0.08, metalness: 0.7, envMapIntensity: 1.8 }),
-      metal: new MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.55, envMapIntensity: 1.2 }),
-      glow,
+      matte: stylize(new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 })),
+      glass: stylize(new MeshStandardMaterial({ vertexColors: true, roughness: 0.12, metalness: 0.45, envMapIntensity: 1.4 }), { paint: 0.5, rim: 1.2 }),
+      metal: stylize(new MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.55, envMapIntensity: 1.2 })),
+      glow: stylize(glow, { edges: false }),
     };
     world.setResource(MaterialsR, m);
   }

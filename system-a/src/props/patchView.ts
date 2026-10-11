@@ -4,6 +4,7 @@
  * ground, merged into one mesh.
  */
 import { Color, Mesh, MeshStandardMaterial } from "three";
+import { stylize } from "../render/style";
 import { Patch, TerrainR } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import type { P2 } from "../geom/polygon";
@@ -47,7 +48,7 @@ export function patchView(): Plugin {
           if (mb.triangleCount === 0) return;
           const mesh = new Mesh(
             mb.build(),
-            new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
+            stylize(new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }), { edges: false, paint: 1.3, rim: 0.3, paving: 1.5 }),
           );
           mesh.receiveShadow = true;
           mesh.name = "patches";

@@ -33,7 +33,13 @@ export const styleNames = () => styleCatalog.names();
 
 /** Build one building into `parts` at the requested level of detail. */
 export function buildBuilding(p: Parts, b: BuildingData, lod: "detail" | "massing"): void {
+  const start = { matte: p.matte.vertexCount, metal: p.metal.vertexCount, glass: p.glass.vertexCount };
   styleFor(b.style)[lod](p, b);
+  // Painted ambient gradient: walls darken toward the street and catch light up top.
+  const top = b.baseY + Math.min(18, Math.max(4, b.floors * b.floorHeight * 0.7));
+  p.matte.gradeVertical(start.matte, b.baseY - 0.5, top, 0.7, 1.05);
+  p.metal.gradeVertical(start.metal, b.baseY - 0.5, top, 0.75, 1.05);
+  p.glass.gradeVertical(start.glass, b.baseY - 0.5, top, 0.85, 1.0);
 }
 
 /** Walls start this far below the pad so sloped ground never shows a gap. */
@@ -88,6 +94,8 @@ export function lookOf(b: BuildingData): Look {
   }
   const facade = facadeCatalog.require(facadeName);
   const pal = recipe.palette(rng, b);
+  // Roofs vary too: gravel, clay, slate and sage membranes.
+  if (pal.roof === SWATCH.roof) pal.roof = tint(lookRng(b, 0x700f), SWATCH.roofs, 0.6);
   facade.palette?.(pal, lookRng(b, 0x9a1e));
   const look: Look = {
     facadeName,

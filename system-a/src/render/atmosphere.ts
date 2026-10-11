@@ -67,8 +67,8 @@ interface Preset {
 }
 
 const PRESETS: Record<TimeOfDay, Preset> = {
-  morning: { sky: ["#6fa3d6", "#b4cde3", "#f1dfcf", "#b9b8a8"], sun: [20, 22, "#ffe0bd", 2.0], hemi: ["#dfeaf6", "#b7a68a", 0.95], env: 0.45, night: 0, exposure: 1.0, bloom: 0.15 },
-  day: { sky: ["#5d9bd3", "#9cc4e4", "#e2ecf0", "#b9c0b6"], sun: [150, 53, "#fff4e0", 2.2], hemi: ["#e8f3ff", "#b9a98c", 1.1], env: 0.45, night: 0, exposure: 1.0, bloom: 0.12 },
+  morning: { sky: ["#5a98d8", "#a9cdec", "#fbe3cc", "#c3b9a2"], sun: [20, 22, "#ffd9b0", 2.7], hemi: ["#b8d4f4", "#c9a780", 0.85], env: 0.35, night: 0, exposure: 1.0, bloom: 0.15 },
+  day: { sky: ["#3f8fe0", "#86c0f0", "#dff1f7", "#c8c2a8"], sun: [150, 50, "#fff0d4", 3.0], hemi: ["#a9d0ff", "#d3b07e", 0.95], env: 0.35, night: 0, exposure: 1.0, bloom: 0.12 },
   golden: { sky: ["#5a80b8", "#c9b6a4", "#f4cf9e", "#a89a84"], sun: [205, 14, "#ffc07e", 2.3], hemi: ["#e4e2dc", "#9a8a72", 0.9], env: 0.42, night: 0.1, exposure: 1.05, bloom: 0.3 },
   dusk: { sky: ["#25345c", "#6e5f86", "#e08a68", "#4a4648"], sun: [215, 2, "#ff8a5c", 0.7], hemi: ["#8f8fb8", "#4a4048", 0.55], env: 0.22, night: 0.75, exposure: 1.1, bloom: 0.7 },
   night: { sky: ["#070d1a", "#101b30", "#25324a", "#151a20"], sun: [120, 48, "#9db2d8", 0.5], hemi: ["#4a5a80", "#22242c", 0.55], env: 0.14, night: 1, exposure: 1.25, bloom: 0.9 },

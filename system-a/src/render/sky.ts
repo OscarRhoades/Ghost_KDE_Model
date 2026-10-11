@@ -10,6 +10,7 @@ import {
   Color,
   Mesh,
   MeshBasicMaterial,
+  ShaderMaterial,
   PMREMGenerator,
   Scene,
   SphereGeometry,
@@ -61,6 +62,64 @@ function paintBackdrop(canvas: HTMLCanvasElement) {
   ctx.fillRect(0, 0, 2, 256);
 }
 
+/** Uniforms for the painted clouds on the street-level sky dome. */
+export const cloudUniforms = {
+  uCloudColor: { value: new Color("#ffffff") },
+  uCloudShade: { value: new Color("#c9d6e8") },
+  uCover: { value: 0.45 },
+  uTime: { value: 0 },
+};
+
+/** Sky gradient from vertex colors with soft, painted cumulus drifting across it. */
+function cloudMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: cloudUniforms,
+    vertexColors: true,
+    side: BackSide,
+    depthWrite: false,
+    fog: false,
+    vertexShader: /* glsl */ `
+      varying vec3 vColor;
+      varying vec3 vDir;
+      void main() {
+        vColor = color;
+        vDir = normalize(position);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uCloudColor, uCloudShade;
+      uniform float uCover, uTime;
+      varying vec3 vColor;
+      varying vec3 vDir;
+      float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n(vec2 p) {
+        vec2 i = floor(p), f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y);
+      }
+      float fbm(vec2 p) {
+        float a = 0.5, s = 0.0;
+        for (int k = 0; k < 5; k++) { s += a * n(p); p = p * 2.03 + 17.0; a *= 0.5; }
+        return s;
+      }
+      void main() {
+        vec3 col = vColor;
+        if (vDir.y > 0.0) {
+          // Project onto a cloud deck; clouds thin out toward the horizon.
+          vec2 uv = vDir.xz / (vDir.y + 0.12) * 1.6 + vec2(uTime * 0.004, uTime * 0.002);
+          float d = fbm(uv);
+          float shape = smoothstep(1.0 - uCover, 1.0 - uCover + 0.18, d);
+          float lit = smoothstep(0.35, 0.9, fbm(uv * 1.7 + 4.0 + vec2(0.15, 0.25)));
+          vec3 cloud = mix(uCloudShade, uCloudColor, 0.55 + 0.45 * lit);
+          float fade = smoothstep(0.0, 0.18, vDir.y);
+          col = mix(col, cloud, shape * fade * 0.92);
+        }
+        gl_FragColor = vec4(col, 1.0);
+        #include <colorspace_fragment>
+      }`,
+  });
+}
+
 export interface Sky {
   environment: Texture;
   /** Repaint everything for new sky colors. */
@@ -85,6 +144,7 @@ export function createSky(renderer: WebGLRenderer): Sky {
   backdrop.colorSpace = SRGBColorSpace;
 
   const dome = gradientSphere(3000);
+  dome.material = cloudMaterial();
   dome.renderOrder = -1;
   dome.frustumCulled = false;
   dome.name = "sky-dome";

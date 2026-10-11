@@ -163,6 +163,19 @@ stone finishes. Windows inside sit exactly where the facade has them.
 
 Floors connect by a switchback stair; walking height follows the treads.
 
+## The look
+
+A painted, stylized look in the spirit of hero-shooter cities rather than
+flat low-poly (`src/render/style.ts`, `src/render/organic.ts`). One shader
+patch on every lit material gives soft wrapped sunlight, broad painterly
+color variation, painted highlights along quad edges (like bevels, from an
+`edge` attribute the mesh builder records), a surface-tinted rim light and a
+touch of extra saturation. Trees and hedges are soft puffs whose normals bend
+toward the canopy center, shaded from deep green to sunlit tips; the terrain
+is smooth-shaded; buildings darken toward the street; the sky has drifting
+painted clouds; water shifts from deep teal to bright aqua at grazing angles.
+The palette is warm stone, clay, timber and teal glass.
+
 ## Light and atmosphere
 
 `src/render/atmosphere.ts` turns a time of day and a weather into sky colors,

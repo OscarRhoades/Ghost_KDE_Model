@@ -6,7 +6,8 @@
 import { Color } from "three";
 import { Catalog } from "../catalog/registry";
 import { newParts, type Parts, type Slot } from "../buildings/kit";
-import type { MeshBuilder, V3 } from "../render/meshBuilder";
+import type { MeshBuilder, RawMesh, V3 } from "../render/meshBuilder";
+import { column, puff } from "../render/organic";
 
 export interface PropDef {
   build(p: Parts): void;
@@ -80,52 +81,66 @@ export function blob(mb: MeshBuilder, x: number, y: number, z: number, sx: numbe
 }
 
 // ---- Trees ------------------------------------------------------------------------
+// Soft canopies of overlapping puffs whose normals bend toward the canopy
+// center, shaded from a deep inner green to sunlit yellow-green on top.
 
-const BARK = hex("#6b5440");
-const LEAF = ["#6f9e4f", "#5e8f45", "#7aa957", "#557f3e"].map(hex);
+const BARK = hex("#6e4b33");
+const GREEN = {
+  deep: hex("#2e6b3c"),
+  mid: hex("#4f9a42"),
+  sun: hex("#a8d95a"),
+  cool: hex("#3f8f6a"),
+  coolSun: hex("#8fd18a"),
+  olive: hex("#5f8a3a"),
+  oliveSun: hex("#c2d96a"),
+};
+
+/** A canopy of puffs around `c`: [dx, dy, dz, radius] offsets, shaded as one. */
+function canopy(p: Parts, c: V3, puffs: [number, number, number, number][], bottom: Color, top: Color, seed: number, squash = 0.85) {
+  puffs.forEach(([dx, dy, dz, r], k) =>
+    puff(p.matte, [c[0] + dx, c[1] + dy, c[2] + dz], [r, r * squash, r], { canopy: c, bend: 0.6, bottom, top, seed: seed + k, lumps: 0.1 }),
+  );
+}
 
 propCatalog.register("tree-oak", {
   solid: { r: 0.3 },
   build(p) {
-    cylinder(p.matte, 0, 0, 0.28, 0.2, 0, 3.2, BARK);
-    blob(p.matte, 0, 5.2, 0, 3.0, 2.6, 3.0, LEAF[0], 1);
-    blob(p.matte, 1.2, 4.4, 0.6, 1.8, 1.5, 1.8, LEAF[1], 2);
-    blob(p.matte, -1.1, 4.6, -0.8, 1.7, 1.5, 1.7, LEAF[2], 3);
+    column(p.matte, 0, 0, 0.34, 0.2, 0, 3.6, BARK, 8, false);
+    column(p.matte, 0.15, 0, 0.12, 0.06, 2.8, 4.4, BARK, 6, false);
+    canopy(p, [0, 5.4, 0], [[0, 0.4, 0, 2.6], [1.6, -0.3, 0.6, 1.9], [-1.5, -0.2, -0.7, 1.9], [0.5, -0.2, -1.6, 1.7], [-0.6, -0.4, 1.5, 1.7], [0.2, 1.5, 0.2, 1.7]], GREEN.deep, GREEN.sun, 1);
   },
 }, { tags: ["tree"] });
 
 propCatalog.register("tree-plane", {
   solid: { r: 0.3 },
   build(p) {
-    cylinder(p.matte, 0, 0, 0.26, 0.2, 0, 4.2, hex("#8f8a72"));
-    blob(p.matte, 0, 6.6, 0, 3.4, 2.4, 3.4, LEAF[3], 4);
-    blob(p.matte, 0.9, 5.6, 0.8, 2.2, 1.6, 2.2, LEAF[0], 5);
+    column(p.matte, 0, 0, 0.3, 0.2, 0, 4.6, hex("#9a8f72"), 8, false);
+    canopy(p, [0, 6.6, 0], [[0, 0.3, 0, 2.8], [2.0, -0.4, 0.4, 2.0], [-2.0, -0.3, -0.3, 2.0], [0.3, -0.4, 2.0, 1.9], [-0.2, -0.3, -2.0, 1.9], [0, 1.5, 0, 1.8]], GREEN.cool, GREEN.coolSun, 4, 0.75);
   },
 }, { tags: ["tree", "street-tree"] });
 
 propCatalog.register("tree-birch", {
   solid: { r: 0.2 },
   build(p) {
-    cylinder(p.matte, 0, 0, 0.16, 0.1, 0, 5.5, hex("#e8e4dc"));
-    blob(p.matte, 0, 5.8, 0, 1.6, 2.6, 1.6, LEAF[2], 6);
-    blob(p.matte, 0.4, 4.4, 0.2, 1.3, 1.6, 1.3, LEAF[0], 7);
+    column(p.matte, 0, 0, 0.18, 0.1, 0, 6.2, hex("#efeae0"), 7, false);
+    canopy(p, [0, 6.0, 0], [[0, 0.8, 0, 1.5], [0.6, -0.4, 0.3, 1.3], [-0.5, -0.9, -0.3, 1.25], [0.1, -1.9, 0.2, 1.2], [0, 1.9, 0, 1.0]], GREEN.olive, GREEN.oliveSun, 6, 1.05);
   },
 }, { tags: ["tree", "street-tree"] });
 
 propCatalog.register("tree-cherry", {
   solid: { r: 0.2 },
   build(p) {
-    cylinder(p.matte, 0, 0, 0.18, 0.13, 0, 2.4, BARK);
-    blob(p.matte, 0, 3.6, 0, 2.2, 1.6, 2.2, hex("#e9a7b8"), 8);
-    blob(p.matte, 0.8, 3.2, 0.5, 1.3, 1.0, 1.3, hex("#f1bccb"), 9);
+    column(p.matte, 0, 0, 0.2, 0.13, 0, 2.6, BARK, 7, false);
+    canopy(p, [0, 3.8, 0], [[0, 0.3, 0, 1.9], [1.2, -0.2, 0.4, 1.3], [-1.1, -0.1, -0.5, 1.3], [0.3, -0.2, -1.1, 1.2], [-0.3, 0.9, 0.6, 1.1]], hex("#c4628a"), hex("#ffd3e2"), 8, 0.8);
   },
 }, { tags: ["tree", "street-tree"] });
 
 propCatalog.register("tree-pine", {
   solid: { r: 0.25 },
   build(p) {
-    cylinder(p.matte, 0, 0, 0.2, 0.15, 0, 2, BARK);
-    for (let k = 0; k < 3; k++) cylinder(p.matte, 0, 0, 2.2 - k * 0.55, 0, 1.6 + k * 1.6, 4.4 + k * 1.6, hex("#3f6b46"), 7, false);
+    column(p.matte, 0, 0, 0.22, 0.14, 0, 2.2, BARK, 7, false);
+    const tiers: [number, number, number][] = [[2.5, 1.4, 4.6], [2.0, 3.0, 6.2], [1.45, 4.6, 7.8], [0.9, 6.1, 9.0]];
+    tiers.forEach(([r, y0, y1], k) => column(p.matte, 0, 0, r, 0, y0, y1, hex(k % 2 ? "#3f7f52" : "#356f49"), 10, false));
   },
 }, { tags: ["tree"] });
 
@@ -253,7 +268,7 @@ propCatalog.register("planter", {
   solid: { hx: 0.6, hz: 0.6 },
   build(p) {
     block(p.matte, -0.6, 0, -0.6, 0.6, 0.6, 0.6, hex("#9a9184"));
-    blob(p.matte, 0, 0.85, 0, 0.6, 0.45, 0.6, LEAF[1], 11);
+    puff(p.matte, [0, 0.9, 0], [0.62, 0.45, 0.62], { bottom: GREEN.deep, top: GREEN.sun, seed: 11 });
   },
 }, { tags: ["street", "park"] });
 
@@ -332,7 +347,7 @@ propCatalog.register("pavilion", {
 propCatalog.register("hedge", {
   solid: { hx: 2, hz: 0.5 },
   build(p) {
-    block(p.matte, -2, 0, -0.5, 2, 1.2, 0.5, hex("#4f7f3e"));
+    for (let k = 0; k < 4; k++) puff(p.matte, [-1.5 + k, 0.62, 0], [0.7, 0.66, 0.58], { canopy: [0, 0.3, 0], bend: 0.7, bottom: GREEN.deep, top: GREEN.mid.clone().lerp(GREEN.sun, 0.4), seed: k + 30, lumps: 0.08 });
   },
 }, { tags: ["park"] });
 
@@ -451,7 +466,7 @@ propCatalog.register("parasol-table", {
 
 propCatalog.register("shrub", {
   build(p) {
-    blob(p.matte, 0, 0.5, 0, 0.8, 0.6, 0.8, hex("#5f8d47"), 11);
+    canopy(p, [0, 0.6, 0], [[0, 0, 0, 0.75], [0.45, -0.1, 0.2, 0.5], [-0.4, -0.12, -0.25, 0.5]], GREEN.deep, GREEN.sun, 11, 0.8);
   },
 }, { tags: ["garden", "park"] });
 
@@ -619,7 +634,7 @@ propCatalog.register("bike-share", {
 // ---- Templates -------------------------------------------------------------------------
 
 export interface PropTemplate {
-  parts: Partial<Record<Slot, { pos: number[]; col: number[] }>>;
+  parts: Partial<Record<Slot, RawMesh>>;
   def: PropDef;
 }
 

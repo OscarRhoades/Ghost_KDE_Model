@@ -1,4 +1,5 @@
 import { Color, Mesh, MeshStandardMaterial } from "three";
+import { stylize } from "../render/style";
 import type { Entity } from "../ecs/world";
 import { RoadEdge, RoadNode } from "../engine/components";
 import type { Plugin } from "../engine/engine";
@@ -104,13 +105,13 @@ export function roadView(): Plugin {
 
           const mesh = new Mesh(
             mb.build(),
-            new MeshStandardMaterial({
+            stylize(new MeshStandardMaterial({
               vertexColors: true,
               roughness: 0.95,
               polygonOffset: true,
               polygonOffsetFactor: -2,
               polygonOffsetUnits: -2,
-            }),
+            }), { edges: false, paint: 1.2, rim: 0.3, paving: 1.2 }),
           );
           mesh.receiveShadow = true;
           mesh.name = "roads";

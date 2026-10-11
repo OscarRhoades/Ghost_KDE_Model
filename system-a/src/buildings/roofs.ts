@@ -1,5 +1,5 @@
 /** Roof types, drawn on top of each volume. */
-import type { Color } from "three";
+import { Color } from "three";
 import { Catalog } from "../catalog/registry";
 import type { BuildingData } from "../engine/components";
 import { insetConvex, type P2 } from "../geom/polygon";
@@ -124,8 +124,28 @@ export function pitchedRoof(mb: MeshBuilder, fp: readonly P2[], y: number, hip: 
   const cx = (p0[0] + p1[0] + p2[0] + p3[0]) / 4;
   const cz = (p0[1] + p1[1] + p2[1] + p3[1]) / 4;
   const outward = (a: P2, b: P2): V3 => [(a[0] + b[0]) / 2 - cx, 0.5, (a[1] + b[1]) / 2 - cz];
-  mb.quadFacing(v(p0), v(p1), R1, R0, outward(p0, p1), color);
-  mb.quadFacing(v(p2), v(p3), R0, R1, outward(p2, p3), color);
+  if (hip) {
+    mb.quadFacing(v(p0), v(p1), R1, R0, outward(p0, p1), color);
+    mb.quadFacing(v(p2), v(p3), R0, R1, outward(p2, p3), color);
+  } else {
+    // Gable roofs get deep eaves on the long sides: the slope runs past the
+    // wall, with a soffit underneath and a chunky fascia board at the edge.
+    const o = 0.7;
+    const drop = (o * rise) / (span / 2);
+    const fascia = gableColor.clone().lerp(new Color(1, 1, 1), 0.35);
+    for (const [a, b, ra, rb] of [[p0, p1, R0, R1], [p2, p3, R1, R0]] as const) {
+      const m = mid(a, b);
+      const rm = [(ra[0] + rb[0]) / 2, (ra[2] + rb[2]) / 2];
+      const l = Math.hypot(m[0] - rm[0], m[1] - rm[1]) || 1;
+      const nx = (m[0] - rm[0]) / l, nz = (m[1] - rm[1]) / l;
+      const ea: V3 = [a[0] + nx * o, y - drop, a[1] + nz * o];
+      const eb: V3 = [b[0] + nx * o, y - drop, b[1] + nz * o];
+      const out: V3 = [nx, 0.6, nz];
+      mb.quadFacing(ea, eb, rb, ra, out, color);
+      mb.quadFacing(v(a), v(b), eb, ea, [0, -1, 0], fascia.clone().multiplyScalar(0.8));
+      mb.quadFacing(ea, eb, [eb[0], eb[1] - 0.22, eb[2]], [ea[0], ea[1] - 0.22, ea[2]], [nx, 0, nz], fascia);
+    }
+  }
   mb.triFacing(v(p1), v(p2), R1, outward(p1, p2), hip ? color : gableColor);
   mb.triFacing(v(p3), v(p0), R0, outward(p3, p0), hip ? color : gableColor);
 }

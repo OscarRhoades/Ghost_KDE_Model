@@ -121,7 +121,7 @@ export function propView(): Plugin {
               }
               for (const slot of Object.keys(tpl.parts) as Slot[]) {
                 const d = tpl.parts[slot]!;
-                parts[slot].appendTransformed(d.pos, d.col, p.rot, p.scale, p.x, y, p.z);
+                parts[slot].appendTransformed(d, p.rot, p.scale, p.x, y, p.z);
               }
             }
             t.group = toGroup(parts, materials, `props-${t.key}`);

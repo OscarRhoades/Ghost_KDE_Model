@@ -8,7 +8,7 @@ import { Catalog } from "../catalog/registry";
 import type { BuildingData, Entrance } from "../engine/components";
 import type { P2 } from "../geom/polygon";
 import type { V3 } from "../render/meshBuilder";
-import { at, band, bays, box, cap, doorFrame, doorOn, frontEdge, hitsDoor, longestEdge, panel, walls, type Edge, type Parts, type Rng } from "./kit";
+import { at, band, bays, box, cap, doorFrame, doorOn, frontEdge, hitsDoor, longestEdge, normalOf, panel, walls, type Edge, type Parts, type Rng } from "./kit";
 import { SWATCH, type Palette } from "./look";
 import type { VolumeRole } from "./massing";
 
@@ -62,10 +62,19 @@ export const facadeCatalog = new Catalog<FacadeSystem>("facade system");
 
 /** Window: a dark frame panel with a slightly smaller glass pane in front. */
 export function windowOn(p: Parts, e: Edge, s0: number, s1: number, y0: number, y1: number, glass: Color, frame: Color, out = 0) {
-  const f = 0.08;
+  const f = 0.1;
   panel(p.metal, e, s0 - f, s1 + f, y0 - f, y1 + f, out + 0.02, frame);
   panel(p.glass, e, s0, s1, y0, y1, out + 0.04, glass);
+  // A chunky sill: front, top and underside, catching the light.
+  const n = normalOf(e);
+  const A = (s: number, y: number, o: number) => at(e, s, y, out + o);
+  const l = s0 - f - 0.08, r = s1 + f + 0.08, lo = y0 - f - 0.12, hi = y0 - f;
+  p.matte.quadFacing(A(l, lo, 0.2), A(r, lo, 0.2), A(r, hi, 0.2), A(l, hi, 0.2), n, frame.clone().lerp(SILL, 0.6));
+  p.matte.quadFacing(A(l, hi, 0), A(r, hi, 0), A(r, hi, 0.2), A(l, hi, 0.2), [0, 1, 0], frame.clone().lerp(SILL, 0.75));
+  p.matte.quadFacing(A(l, lo, 0), A(r, lo, 0), A(r, lo, 0.2), A(l, lo, 0.2), [0, -1, 0], frame.clone().lerp(SILL, 0.4));
 }
+
+const SILL = new Color("#efe3cc");
 
 /** Center (s) of the doorway on an edge, or the edge middle. */
 export function doorCenter(e: Edge, door?: Entrance): number {

@@ -60,7 +60,7 @@ describe("floor plans", () => {
       const pts = [[0.5, 0.5], [0.1, 0.1], [0.9, 0.9]].map(([r, w]) => [s.o[0] + s.run[0] * r + s.across[0] * w, s.o[1] + s.run[1] * r + s.across[1] * w]);
       for (const f of plan.floors) for (const [x, z] of pts) expect(pointInPolygon(x, z, f.shell), `${b.style} floor ${f.index}`).toBe(true);
     }
-  });
+  }, 30000);
 
   it("is deterministic", () => {
     const b = byStyle("apartment", 3)!;

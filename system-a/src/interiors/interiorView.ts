@@ -5,6 +5,7 @@
  * neighbors are built, and only for one building at a time.
  */
 import { Color, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, type Material } from "three";
+import { stylize } from "../render/style";
 import { bays, cap, doorOn, edgesOf, type Edge } from "../buildings/kit";
 import { specialInfo } from "../buildings/special";
 import { openingsAt, type WallOpening } from "../buildings/styles";
@@ -221,7 +222,7 @@ export function interiorView(): Plugin {
         name: "interior-view",
         start(world) {
           materials = {
-            matte: new MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }),
+            matte: stylize(new MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { paint: 0.6, rim: 0.3 }),
             glass: new MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.3, depthWrite: false }),
             light: new MeshBasicMaterial({ vertexColors: true }),
           };
