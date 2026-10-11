@@ -11,6 +11,7 @@ import { bays, box, cap, doorFrame, edgesOf, panel, prism, walls, type Parts, ty
 import { facadeCatalog, type FacadeCtx, type FacadeSystem, type Slice } from "./facades";
 import { lookRng, SWATCH, tint, type Palette } from "./look";
 import { groundPlans, isPitched, massingOf, planAt, type Volume } from "./massing";
+import { drawGround, groundUseOf } from "./ground";
 import { pitchedRoof, roofCatalog } from "./roofs";
 
 export interface BuildingStyle {
@@ -130,10 +131,15 @@ function drawRecipe(p: Parts, b: BuildingData) {
   const m = massingOf(b);
   for (const plan of groundPlans(b)) walls(p.matte, edgesOf(plan), b.baseY - FOUNDATION, b.baseY + 0.25, SWATCH.concrete[1], 0.05, b.entrance);
   const roofCtx = { b, pal: look.pal, rng: lookRng(b, 0x5007) };
+  const use = groundUseOf(b);
   for (const v of m.volumes) {
     const slices = slicesOf(v);
     for (const s of slices) {
-      look.facade.draw(p, s, ctx);
+      // A shop or arcade takes over the ground floor of the main volume.
+      if (use !== "none" && s.f0 === 0 && v.role !== "wing") {
+        drawGround(p, { ...s, f1: 1, top: s.f1 === 1 && s.top }, ctx, use);
+        if (s.f1 > 1) look.facade.draw(p, { ...s, f0: 1 }, ctx);
+      } else look.facade.draw(p, s, ctx);
       // Floor plates show between the floors of tapering or twisting towers.
       if (slices.length > 1 && !s.top) cap(p.matte, s.poly, ctx.y(s.f1), look.pal.trim);
     }

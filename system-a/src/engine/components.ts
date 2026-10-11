@@ -53,6 +53,8 @@ export interface BuildingData {
   explicit: { floorHeight?: number; roof?: string; style?: string; seed?: number };
   /** Front door, facing the nearest street (resolved during load). */
   entrance?: Entrance;
+  /** Midpoints of ground-floor walls that face a street (resolved during load). */
+  streetSides?: [number, number][];
   /** Catalog choices from the file; when absent the style picks with the seed. */
   shape?: string;
   facade?: string;

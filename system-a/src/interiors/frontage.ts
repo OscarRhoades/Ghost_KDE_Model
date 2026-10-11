@@ -25,21 +25,33 @@ export function doorSize(style: string): { width: number; height: number } {
   }
 }
 
+const distToRoad = (roads: SegmentGrid, x: number, z: number) => {
+  for (const r of [40, 120, 400]) {
+    const near = roads.near(x, z, r);
+    if (near.length) return Math.min(...near.map((s) => segmentDistance(x, z, s.ax, s.az, s.bx, s.bz).d));
+  }
+  return Infinity;
+};
+
+/** Ground-floor walls within a few meters of the closest one to a street. */
+export function streetSides(b: BuildingData, roads: SegmentGrid): [number, number][] {
+  const sides = edgesOf(shellOf(b, 0)).map((e) => {
+    const m: [number, number] = [(e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2];
+    // Probe a little outside the wall so a road behind the building doesn't count.
+    return { m, d: distToRoad(roads, m[0] + e.nx * 2, m[1] + e.nz * 2), len: e.len };
+  });
+  const best = Math.min(...sides.map((s) => s.d));
+  return sides.filter((s) => s.len > 3 && s.d < Math.max(best + 6, 0) && s.d < 24).map((s) => s.m);
+}
+
 export function chooseEntrance(b: BuildingData, roads: SegmentGrid): Entrance | undefined {
   const { width, height } = doorSize(b.style);
   const edges = edgesOf(shellOf(b, 0)).filter((e) => e.len >= width + 1.2);
   if (edges.length === 0) return undefined;
-  const distToRoad = (x: number, z: number) => {
-    for (const r of [40, 120, 400]) {
-      const near = roads.near(x, z, r);
-      if (near.length) return Math.min(...near.map((s) => segmentDistance(x, z, s.ax, s.az, s.bx, s.bz).d));
-    }
-    return Infinity;
-  };
   let best = edges[0];
   let bestD = Infinity;
   for (const e of edges) {
-    const d = distToRoad((e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2);
+    const d = distToRoad(roads, (e.a[0] + e.b[0]) / 2, (e.a[1] + e.b[1]) / 2);
     if (d < bestD - 0.5) {
       best = e;
       bestD = d;
@@ -75,6 +87,7 @@ export function frontage(): Plugin {
           for (const e of world.query(Building)) {
             const b = world.read(e, Building);
             b.entrance = chooseEntrance(b, roads);
+            b.streetSides = streetSides(b, roads);
           }
         },
       });

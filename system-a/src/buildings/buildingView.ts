@@ -36,6 +36,7 @@ function makeMaterials(): Record<Slot, Material> {
     matte: new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 }),
     glass: new MeshStandardMaterial({ vertexColors: true, roughness: 0.08, metalness: 0.7, envMapIntensity: 1.8 }),
     metal: new MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.55, envMapIntensity: 1.2 }),
+    glow: new MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }),
   };
 }
 

@@ -97,3 +97,27 @@ describe("facade systems", () => {
     });
   }
 });
+
+import { groundCatalog, groundUseOf } from "../src/buildings/ground";
+
+describe("ground-floor uses", () => {
+  for (const use of groundCatalog.names()) {
+    it(`${use} draws a ground floor`, () => {
+      const b = building("brick-midrise", 4, "box", 30, 18);
+      b.ground = use;
+      b.entrance = { x: 115, z: 100, tx: 1, tz: 0, width: 1.6, height: 2.4, y: 5 };
+      b.streetSides = [[115, 100]];
+      expect(groundUseOf(b)).toBe(use);
+      const p = newParts();
+      buildBuilding(p, b, "detail");
+      expect(p.matte.triangleCount + p.glass.triangleCount).toBeGreaterThan(100);
+    });
+  }
+
+  it("gives most brick blocks a shop and houses none", () => {
+    const uses = Array.from({ length: 50 }, (_, k) => groundUseOf(building("brick-midrise", 4, undefined, 30, 18, k + 9)));
+    expect(uses.filter((u) => u !== "none").length).toBeGreaterThan(30);
+    expect(new Set(uses).size).toBeGreaterThan(4);
+    expect(groundUseOf(building("suburban-house", 2, undefined, 12, 9))).toBe("none");
+  });
+});

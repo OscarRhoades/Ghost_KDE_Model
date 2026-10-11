@@ -10,12 +10,12 @@ import type { Entrance } from "../engine/components";
 import { centroid, signedArea, type P2 } from "../geom/polygon";
 import { MeshBuilder, type V3 } from "../render/meshBuilder";
 
-/** Material slots. Each becomes one merged mesh per tile. */
-export type Slot = "matte" | "glass" | "metal";
+/** Material slots. Each becomes one merged mesh per tile. `glow` lights up at night (signs). */
+export type Slot = "matte" | "glass" | "metal" | "glow";
 export type Parts = Record<Slot, MeshBuilder>;
 
 export function newParts(): Parts {
-  return { matte: new MeshBuilder(), glass: new MeshBuilder(), metal: new MeshBuilder() };
+  return { matte: new MeshBuilder(), glass: new MeshBuilder(), metal: new MeshBuilder(), glow: new MeshBuilder() };
 }
 
 export interface Edge {
