@@ -6,10 +6,12 @@
  *   Touch:   left side of the screen is a thumbstick, drag elsewhere to look.
  */
 import { Fog, PerspectiveCamera } from "three";
+import { defineResource } from "../ecs/world";
 import { FocusR, TerrainR } from "../engine/components";
 import type { Plugin } from "../engine/engine";
 import { FootprintGrid } from "../physics/collision";
 import { ActiveCameraR, PALETTE, RendererR, SceneR } from "../render/renderPlugin";
+import { NavR, WalkerR, type WalkPose } from "../interiors/nav";
 import { buildFootprintGrid, findSpawn, WALKER_RADIUS } from "./spawn";
 import { ViewR } from "./viewMode";
 
@@ -22,6 +24,9 @@ const STICK_RADIUS = 60; // px of thumb travel for full speed
 const MAX_PITCH = Math.PI / 2 - 0.05;
 /** Full building detail within this distance (m) of the walker. */
 const DETAIL_RADIUS = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 320 : 480;
+
+/** Point the walker's view (radians; yaw 0 looks north, pitch 0 level). */
+export const WalkLookR = defineResource<(yaw: number, pitch?: number) => void>("WalkLook");
 
 /** Thumbstick state for on-screen UI to draw. */
 export interface StickState {
@@ -37,7 +42,9 @@ export function walkCamera(opts: { onStick?: (s: StickState) => void } = {}): Pl
     name: "walk-camera",
     install(engine) {
       const camera = new PerspectiveCamera(70, 1, 0.1, 4000);
+      /** Camera position (eye); follows the walker's feet smoothly. */
       const pos = { x: 0, y: 0, z: 0 };
+      const walker: WalkPose = { x: 0, z: 0, y: 0, floor: 0, building: null };
       let yaw = 0;
       let pitch = -0.05;
       let grid = new FootprintGrid();
@@ -60,15 +67,24 @@ export function walkCamera(opts: { onStick?: (s: StickState) => void } = {}): Pl
           canvas = world.resource(RendererR).domElement;
           const view = world.resource(ViewR);
           const active = () => view.mode === "walk";
+          world.setResource(WalkLookR, (y, p = 0) => {
+            yaw = y;
+            pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, p));
+          });
 
           view.register("walk", (at) => {
             const spawn = findSpawn(world, grid, at?.x ?? pos.x, at?.z ?? pos.z);
-            pos.x = spawn.x;
-            pos.z = spawn.z;
+            pos.x = walker.x = spawn.x;
+            pos.z = walker.z = spawn.z;
+            walker.building = null;
+            walker.floor = 0;
             yaw = at?.yaw ?? spawn.yaw;
             pitch = -0.05;
             const { hf } = world.resource(TerrainR);
-            pos.y = hf.heightAt(pos.x, pos.z) + EYE_HEIGHT;
+            walker.y = hf.heightAt(pos.x, pos.z);
+            world.getResource(NavR)?.settle(walker);
+            pos.y = walker.y + EYE_HEIGHT;
+            world.setResource(WalkerR, walker);
             keys.clear();
             world.setResource(ActiveCameraR, camera);
             // Closer fog at street level adds depth and hides the far map edge.
@@ -198,22 +214,30 @@ export function walkCamera(opts: { onStick?: (s: StickState) => void } = {}): Pl
           const dx = (fx * f + rx * s) * step;
           const dz = (fz * f + rz * s) * step;
 
-          if (dx || dz) {
+          const nav = world.getResource(NavR);
+          if (nav) {
+            // Streets, doorways, interior walls and stairs.
+            if (dx || dz) nav.move(walker, dx, dz, WALKER_RADIUS);
+          } else if (dx || dz) {
+            // Without the navigator: footprints are solid and ground is terrain.
             const dry = (x: number, z: number) => waterLevel === undefined || hf.heightAt(x, z) > waterLevel + 0.2;
             const inside = (x: number, z: number) => x > 0.5 && z > 0.5 && x < hf.width - 0.5 && z < hf.depth - 0.5;
             // Try the full move, then slide along each axis.
             for (const [mx, mz] of [[dx, dz], [dx, 0], [0, dz]] as const) {
-              const [nx, nz] = grid.resolve(pos.x + mx, pos.z + mz, WALKER_RADIUS);
+              const [nx, nz] = grid.resolve(walker.x + mx, walker.z + mz, WALKER_RADIUS);
               if (dry(nx, nz) && inside(nx, nz) && !grid.blocked(nx, nz, WALKER_RADIUS * 0.9)) {
-                pos.x = nx;
-                pos.z = nz;
+                walker.x = nx;
+                walker.z = nz;
                 break;
               }
             }
+            walker.y = hf.heightAt(walker.x, walker.z);
           }
-
-          const eye = hf.heightAt(pos.x, pos.z) + EYE_HEIGHT;
+          pos.x = walker.x;
+          pos.z = walker.z;
+          const eye = walker.y + EYE_HEIGHT;
           pos.y += (eye - pos.y) * Math.min(1, dt * 12);
+          world.setResource(WalkerR, walker);
 
           camera.aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
           camera.updateProjectionMatrix();

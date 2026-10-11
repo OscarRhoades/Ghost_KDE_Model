@@ -25,8 +25,10 @@ in the viewer to download the loaded city, serialized back through the engine.
 | Look around | click to capture the mouse, or drag | drag on the right side |
 | Back to the map | M, Esc, or **Map** | **Map** |
 
-Walkers collide with buildings, stay out of the water, and start on the nearest
-sidewalk, facing along the street.
+Walkers collide with walls, stay out of the water, and start on the nearest
+sidewalk, facing along the street. Every building has a front door facing the
+nearest street. Walk through it to go inside, and take the stairs to other
+floors. The info panel shows where you are, e.g. "Kitchen · Ground floor".
 
 ## Layout
 
@@ -51,7 +53,10 @@ src/
   camera/isoCamera.ts   orthographic iso camera (mouse, keys, touch gestures)
   camera/walkCamera.ts  first-person walker (keys, mouse look, thumbstick)
   camera/spawn.ts       snap a drop-in point to the nearest sidewalk
-  physics/collision.ts  circle-vs-footprint collision on a spatial grid
+  physics/collision.ts  circle-vs-footprint collision (spawning)
+  physics/walls.ts      circle-vs-wall-segment collision on a spatial grid
+  buildings/shape.ts    shared shape decisions (setbacks, house upper box, floor shells)
+  interiors/            front doors, floor plans, navigation, interior rendering
 generators/demo.ts      the demo city generator (deterministic per seed)
 public/cities/          city files served to the viewer
 ```
@@ -118,12 +123,31 @@ frame, and drop it again once the view moves away.
 Add a style with `registerStyle(name, { detail, massing })`, built from the
 toolkit in `kit.ts`. Unknown style names fall back to `default`.
 
+## Interiors
+
+Floor plans are generated from each building's style and seed
+(`src/interiors/plan.ts`) and built only for the building you are in, a floor
+either side of yours.
+
+| Style | Inside |
+|---|---|
+| `suburban-house` | kitchen and stair by the entrance, living room; bedrooms upstairs (in the cantilevered box on modern houses) |
+| `apartment` / `brick-midrise` | lobby or shop on the ground floor; above, a corridor with flats either side, each a living room and bedroom |
+| `office` / `glass-tower` | lobby with reception desk; open-plan floors of desks around the stair core; setback floors follow the tower |
+| `industrial` | one tall warehouse hall with racking, entered through the open loading door |
+| `civic` | double-height lobby inside the colonnade |
+
+Floors connect by a switchback stair: lane A climbs half a storey away from
+the opening, lane B climbs the rest back. Walking height follows the treads
+continuously. `src/interiors/nav.ts` handles walls, doorways, floors and stairs.
+`src/interiors/frontage.ts` picks each front door on load.
+
 ## Roadmap
 
 1. ✅ Format, ECS core, loader; terrain and roads; isometric camera
 2. ✅ First-person walking with collision; switching between map and walk mode
 3. ✅ Modern building generator: facades per style, reflective glass, detail streaming
-4. Generated interiors: floor plans, rooms, corridors, stairs, doors
+4. ✅ Walkable interiors: front doors, floor plans, stairs, furniture
 5. Street life: trees, lamps, benches, pedestrians, traffic
 6. Day/night cycle and weather
 

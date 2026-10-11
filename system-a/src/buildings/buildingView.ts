@@ -44,7 +44,8 @@ function toGroup(parts: Parts, materials: Record<Slot, Material>, name: string):
   for (const slot of Object.keys(parts) as Slot[]) {
     if (parts[slot].triangleCount === 0) continue;
     const mesh = new Mesh(parts[slot].build(), materials[slot]);
-    mesh.castShadow = true;
+    // Sunlight passes through glass into the interiors.
+    mesh.castShadow = slot !== "glass";
     mesh.receiveShadow = true;
     mesh.name = `${name}-${slot}`;
     g.add(mesh);

@@ -23,6 +23,7 @@ import {
   indexKey,
 } from "./components";
 import { LoadOrder, type Engine, type Plugin } from "./engine";
+import { frontage } from "../interiors/frontage";
 
 /** Blend distances (meters) from flattened ground back to natural terrain. */
 const PAD_BLEND = 10;
@@ -276,5 +277,5 @@ function markPolygon(hf: Heightfield, poly: readonly P2[], surface: Uint8Array, 
 
 /** Every core data plugin, in dependency order. */
 export function coreDataPlugins(): Plugin[] {
-  return [terrainData(), roadsData(), parcelsData(), buildingsData(), terrainConform()];
+  return [terrainData(), roadsData(), parcelsData(), buildingsData(), frontage(), terrainConform()];
 }

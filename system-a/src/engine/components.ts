@@ -51,6 +51,21 @@ export interface BuildingData {
   baseY: number;
   /** Raw optional fields as written, for faithful saving. */
   explicit: { floorHeight?: number; roof?: string; style?: string; seed?: number };
+  /** Front door, facing the nearest street (resolved during load). */
+  entrance?: Entrance;
+}
+
+/** A doorway in a wall: center on the ground plane, the wall's direction, size. */
+export interface Entrance {
+  x: number;
+  z: number;
+  /** Unit tangent of the wall the door sits in. */
+  tx: number;
+  tz: number;
+  width: number;
+  height: number;
+  /** Threshold elevation. */
+  y: number;
 }
 export const Building = defineComponent<BuildingData>("Building");
 

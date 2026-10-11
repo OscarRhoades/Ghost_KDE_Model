@@ -26,6 +26,8 @@ export const LoadOrder = {
   roads: 10,
   parcels: 20,
   buildings: 30,
+  /** Derived data that needs roads and buildings (front doors). */
+  frontage: 40,
   /** Runs after every data section is in the world. */
   conform: 100,
 } as const;

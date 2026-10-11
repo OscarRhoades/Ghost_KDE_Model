@@ -3,6 +3,8 @@ import { buildingView } from "./buildings/buildingView";
 import { isoCamera, type IsoCameraOptions } from "./camera/isoCamera";
 import { viewModes } from "./camera/viewMode";
 import { walkCamera, type StickState } from "./camera/walkCamera";
+import { interiorView } from "./interiors/interiorView";
+import { navigation } from "./interiors/nav";
 import { coreDataPlugins } from "./engine/dataPlugins";
 import type { Plugin } from "./engine/engine";
 import { renderPlugin, type RenderOptions } from "./render/renderPlugin";
@@ -26,5 +28,7 @@ export function viewerPlugins(opts: ViewerOptions): Plugin[] {
     buildingView(),
     isoCamera(opts.iso),
     walkCamera({ onStick: opts.onStick }),
+    navigation(),
+    interiorView(),
   ];
 }

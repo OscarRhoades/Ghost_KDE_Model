@@ -1,5 +1,6 @@
 import { IsoControlsR } from "./camera/isoCamera";
 import { ViewR } from "./camera/viewMode";
+import { LocationR } from "./interiors/interiorView";
 import type { StickState } from "./camera/walkCamera";
 import { Building, FocusR, Parcel, RoadEdge } from "./engine/components";
 import { Engine } from "./engine/engine";
@@ -80,6 +81,16 @@ async function main() {
       a.click();
       URL.revokeObjectURL(a.href);
     }
+  });
+
+  // Show where the walker is ("Kitchen · Ground floor") in the HUD.
+  const locationEl = document.getElementById("location")!;
+  engine.addSystem({
+    name: "hud-location",
+    update(world) {
+      const text = world.getResource(LocationR)?.label ?? "";
+      if (locationEl.textContent !== text) locationEl.textContent = text;
+    },
   });
 
   engine.run();

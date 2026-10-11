@@ -26,6 +26,8 @@
       .walk-hint { display: none; }
       body[data-mode="walk"] .walk-hint { display: inline; }
       body[data-mode="walk"] .iso-hint { display: none; }
+      body[data-mode="walk"] #location { display: block; font-weight: 600; margin: 2px 0 4px; }
+      #location:empty { display: none !important; }
       #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 0 1px rgba(0,0,0,0.35); pointer-events: none; display: none; }
       body[data-mode="walk"] #crosshair { display: block; }
       @media (pointer: coarse) { body[data-mode="walk"] #crosshair { display: none; } }
@@ -39,6 +41,7 @@
     <div id="viewport"></div>
     <div id="hud">
       <h1 data-name>System-A</h1>
+      <div id="location" class="walk-hint"></div>
       <div data-stats></div>
       <div class="keys">
         <span class="iso-hint">

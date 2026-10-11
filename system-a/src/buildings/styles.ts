@@ -6,15 +6,19 @@
  */
 import { Color } from "three";
 import type { BuildingData } from "../engine/components";
-import { insetConvex, quadPoint, type P2 } from "../geom/polygon";
+import { insetConvex, type P2 } from "../geom/polygon";
 import {
   band,
   bays,
   box,
   cap,
+  doorFrame,
   edgesOf,
+  frontEdge,
+  hitsDoor,
   longestEdge,
   panel,
+  panelAround,
   prism,
   rngFor,
   scaled,
@@ -23,6 +27,7 @@ import {
   type Parts,
   type Rng,
 } from "./kit";
+import { houseUpper, longFirst, towerSections } from "./shape";
 import type { MeshBuilder, V3 } from "../render/meshBuilder";
 
 export interface BuildingStyle {
@@ -75,6 +80,20 @@ const FOUNDATION = 2;
 const yAt = (b: BuildingData, floor: number) => b.baseY + floor * b.floorHeight;
 const top = (b: BuildingData) => yAt(b, b.floors);
 
+/** Center (s) of the doorway on an edge, or the edge middle. */
+function doorCenter(e: Edge, b: BuildingData): number {
+  const d = b.entrance;
+  if (!d) return e.len / 2;
+  return (d.x - e.a[0]) * e.tx + (d.z - e.a[1]) * e.tz;
+}
+
+/** Canopy over the front door, `w` wide and `depth` deep. */
+function canopy(p: Parts, E: Edge[], b: BuildingData, y: number, w: number, depth: number, c: Color) {
+  const front = E[frontEdge(E, b.entrance)];
+  const s = Math.min(front.len - w / 2, Math.max(w / 2, doorCenter(front, b)));
+  box(p.metal, front, s - w / 2, s + w / 2, y, y + 0.35, 0, depth, c);
+}
+
 /** Window: a dark frame panel with a slightly smaller glass pane in front. */
 function windowOn(p: Parts, e: Edge, s0: number, s1: number, y0: number, y1: number, glass: Color, frame: Color, out = 0) {
   const f = 0.08;
@@ -83,7 +102,7 @@ function windowOn(p: Parts, e: Edge, s0: number, s1: number, y0: number, y1: num
 }
 
 function plinth(p: Parts, b: BuildingData, poly: readonly P2[], c: Color) {
-  walls(p.matte, edgesOf(poly), b.baseY - FOUNDATION, b.baseY + 0.25, c, 0.05);
+  walls(p.matte, edgesOf(poly), b.baseY - FOUNDATION, b.baseY + 0.25, c, 0.05, b.entrance);
 }
 
 function parapet(mb: MeshBuilder, edges: Edge[], y: number, h: number, c: Color) {
@@ -92,36 +111,19 @@ function parapet(mb: MeshBuilder, edges: Edge[], y: number, h: number, c: Color)
 
 // ---- Glass tower ------------------------------------------------------------
 
-interface TowerSection {
-  poly: P2[];
-  f0: number;
-  f1: number;
-}
-
-/** Split tall towers into a base and an inset upper section (setback). */
-function towerSections(b: BuildingData, rng: Rng): TowerSection[] {
-  const fp = b.footprint.map((q) => [q[0], q[1]] as P2);
-  if (b.floors >= 20 && rng.chance(0.75)) {
-    const split = Math.round(b.floors * rng.range(0.55, 0.8));
-    const upper = insetConvex(fp, rng.range(2.5, 5));
-    if (upper) return [{ poly: fp, f0: 0, f1: split }, { poly: upper, f0: split, f1: b.floors }];
-  }
-  return [{ poly: fp, f0: 0, f1: b.floors }];
-}
-
 registerStyle("glass-tower", {
   detail(p, b, rng) {
     const glass = rng.pick(P.glass);
     const frame = rng.pick(P.frame);
     const slab = rng.pick(P.concrete);
     const fins = rng.chance(0.5);
-    const sections = towerSections(b, rng);
+    const sections = towerSections(b);
     plinth(p, b, sections[0].poly, slab);
     sections.forEach((sec, i) => {
       const E = edgesOf(sec.poly);
       const y0 = yAt(b, sec.f0);
       const y1 = yAt(b, sec.f1);
-      walls(p.glass, E, y0, y1, glass);
+      walls(p.glass, E, y0, y1, glass, 0, i === 0 ? b.entrance : undefined);
       // Slab edges every floor (every other floor on finned towers).
       for (let f = sec.f0 + 1; f < sec.f1; f += fins ? 2 : 1) band(p.matte, E, yAt(b, f) - 0.18, yAt(b, f) + 0.18, 0.12, slab);
       if (fins) {
@@ -133,8 +135,8 @@ registerStyle("glass-tower", {
     // Double-height lobby: darker frame band and an entrance canopy.
     const E0 = edgesOf(sections[0].poly);
     band(p.metal, E0, b.baseY + 2 * b.floorHeight - 0.4, b.baseY + 2 * b.floorHeight, 0.2, frame);
-    const front = E0[longestEdge(E0)];
-    box(p.metal, front, front.len * 0.3, front.len * 0.7, b.baseY + 4.2, b.baseY + 4.6, 0, 3.2, frame);
+    canopy(p, E0, b, b.baseY + 4.2, 9, 3.2, frame);
+    doorFrame(p.metal, E0, b.entrance, frame);
     // Crown: plant room, and a mast on the tallest towers.
     const last = sections[sections.length - 1];
     const t = top(b);
@@ -143,7 +145,7 @@ registerStyle("glass-tower", {
   },
   massing(p, b, rng) {
     const glass = rng.pick(P.glass);
-    for (const sec of towerSections(b, rng)) {
+    for (const sec of towerSections(b)) {
       walls(p.glass, edgesOf(sec.poly), sec.f0 === 0 ? b.baseY - FOUNDATION : yAt(b, sec.f0), yAt(b, sec.f1), glass);
       cap(p.matte, sec.poly, yAt(b, sec.f1), P.roof);
     }
@@ -160,14 +162,14 @@ const office: BuildingStyle = {
     const frame = rng.pick(P.frame);
     const t = top(b);
     plinth(p, b, b.footprint, spandrel);
-    walls(p.glass, E, b.baseY, t, glass);
+    walls(p.glass, E, b.baseY, t, glass, 0, b.entrance);
+    doorFrame(p.metal, E, b.entrance, frame);
     for (let f = 1; f <= b.floors; f++) band(p.matte, E, yAt(b, f) - 1.0, yAt(b, f) + (f === b.floors ? 0.6 : 0.1), 0.12, spandrel);
     if (rng.chance(0.6)) {
       for (const e of E) for (const s of bays(e.len, 3, 0.5)) box(p.matte, e, s - 0.08, s + 0.08, yAt(b, 1) - 1, t, 0, 0.7, spandrel);
     }
     cap(p.matte, b.footprint, t + 0.6, P.roof);
-    const front = E[longestEdge(E)];
-    box(p.metal, front, front.len * 0.35, front.len * 0.65, b.baseY + 3.4, b.baseY + 3.7, 0, 2.4, frame);
+    canopy(p, E, b, b.baseY + 3.0, 6, 2.4, frame);
     prism(p.matte, scaled(b.footprint, 0.35), t + 0.6, t + 3.2, P.concrete[1], P.roof);
   },
   massing(p, b) {
@@ -201,15 +203,18 @@ function midrise(palette: Color[], retailChance: number): BuildingStyle {
         for (const e of E) {
           const cuts = bays(e.len, 5);
           for (let k = 0; k + 1 < cuts.length; k++) {
-            box(p.matte, e, cuts[k] - 0.25, cuts[k] + 0.25, b.baseY, g1, 0, 0.15, wall);
-            panel(p.glass, e, cuts[k] + 0.25, cuts[k + 1] - 0.25, b.baseY + 0.2, g1 - 0.6, -0.1, glass);
+            if (!hitsDoor(e, cuts[k] - 0.25, cuts[k] + 0.25, b.baseY, b.entrance)) {
+              box(p.matte, e, cuts[k] - 0.25, cuts[k] + 0.25, b.baseY, g1, 0, 0.15, wall);
+            }
+            panelAround(p.glass, e, cuts[k] + 0.25, cuts[k + 1] - 0.25, b.baseY + 0.2, g1 - 0.6, -0.1, glass, b.entrance);
           }
           box(p.metal, e, 0, e.len, g1 - 0.7, g1 - 0.4, 0, 1.4, frame); // canopy
         }
         walls(p.matte, E, g1 - 0.6, t, wall);
       } else {
-        walls(p.matte, E, b.baseY, t, wall);
+        walls(p.matte, E, b.baseY, t, wall, 0, b.entrance);
       }
+      doorFrame(p.metal, E, b.entrance, frame);
 
       // Upper floors.
       E.forEach((e, ei) => {
@@ -222,6 +227,7 @@ function midrise(palette: Color[], retailChance: number): BuildingStyle {
             if (s1 - s0 < 0.6) continue;
             const balcony = f >= 1 && balconyEdges.has(ei) && k % 2 === (f % 2);
             const y0 = y + (tall || balcony ? 0.1 : 0.9);
+            if (hitsDoor(e, s0, s1, y0, b.entrance)) continue;
             windowOn(p, e, s0, s1, y0, y + b.floorHeight - 0.5, glass, frame);
             if (balcony) {
               box(p.matte, e, s0 - 0.4, s1 + 0.4, y - 0.15, y + 0.05, 0, 1.5, accent);
@@ -245,43 +251,35 @@ registerStyle("brick-midrise", midrise(P.brick, 0.8));
 
 // ---- Houses ------------------------------------------------------------------
 
-/** Put the longest edge first so u runs along the house's long side. */
-function longFirst(fp: readonly P2[]): P2[] {
-  const q = [...fp];
-  const len = (a: P2, b: P2) => Math.hypot(b[0] - a[0], b[1] - a[1]);
-  return len(q[0], q[1]) >= len(q[1], q[2]) ? q : [q[1], q[2], q[3], q[0]];
-}
-
 function modernHouse(p: Parts, b: BuildingData, rng: Rng) {
   const render = rng.pick(P.white);
   const upperClad = rng.chance(0.55) ? rng.pick(P.timber) : rng.pick(P.charcoal);
   const frame = P.frame[0];
   const glass = rng.pick(P.glass);
-  const fh = Math.max(3, b.floorHeight);
+  const fh = b.floorHeight;
   const y1 = b.baseY + fh;
   const q = longFirst(b.footprint);
   const E = edgesOf(q);
-  const li = longestEdge(E);
+  const fi = frontEdge(E, b.entrance);
+  const garden = E.length === 4 ? (fi + 2) % 4 : longestEdge(E);
 
   plinth(p, b, q, P.concrete[1]);
-  walls(p.matte, E, b.baseY, y1, render);
-  // Big sliding glazing on the long side, smaller windows elsewhere.
+  walls(p.matte, E, b.baseY, y1, render, 0, b.entrance);
+  doorFrame(p.metal, E, b.entrance, frame);
+  // Big sliding glazing on the garden side, smaller windows elsewhere.
   E.forEach((e, k) => {
-    if (k === li) windowOn(p, e, e.len * 0.12, e.len * 0.78, b.baseY + 0.1, y1 - 0.4, glass, frame);
-    else if (e.len > 4) windowOn(p, e, e.len * 0.25, e.len * 0.6, b.baseY + 1.0, b.baseY + 2.4, glass, frame);
+    if (k === garden) windowOn(p, e, e.len * 0.12, e.len * 0.78, b.baseY + 0.1, y1 - 0.4, glass, frame);
+    else if (e.len > 4) {
+      // Shift the window clear of the front door if they would overlap.
+      const [s0, s1] = hitsDoor(e, e.len * 0.25, e.len * 0.6, b.baseY + 1.0, b.entrance) ? [e.len * 0.66, e.len * 0.9] : [e.len * 0.25, e.len * 0.6];
+      if (!hitsDoor(e, s0, s1, b.baseY + 1.0, b.entrance)) windowOn(p, e, s0, s1, b.baseY + 1.0, b.baseY + 2.4, glass, frame);
+    }
   });
-  const doorEdge = E[(li + 2) % E.length];
-  panel(p.metal, doorEdge, doorEdge.len * 0.7, doorEdge.len * 0.7 + 1.1, b.baseY, b.baseY + 2.3, 0.04, P.door);
   cap(p.matte, q, y1, P.roof);
 
-  if (b.floors >= 2 && q.length === 4) {
-    // Upper box: narrower, pushed to the back, cantilevered past one end.
-    const shift = rng.range(1.5, 3);
-    const len = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) || 1;
-    const u0 = shift / len - 0.05;
-    const u1 = 1 + shift / len - 0.25;
-    const v0 = rng.range(0.3, 0.45);
-    const upper: P2[] = [quadPoint(q, u0, v0), quadPoint(q, u1, v0), quadPoint(q, u1, 1), quadPoint(q, u0, 1)];
+  const up = houseUpper(b);
+  if (up) {
+    const upper = up.poly;
     const h = fh * (b.floors - 1);
     const UE = edgesOf(upper);
     walls(p.matte, UE, y1, y1 + h, upperClad);
@@ -303,15 +301,18 @@ function pitchedHouse(p: Parts, b: BuildingData, rng: Rng) {
   const E = edgesOf(q);
   const t = top(b);
   plinth(p, b, q, P.concrete[1]);
-  walls(p.matte, E, b.baseY, t, wall);
+  walls(p.matte, E, b.baseY, t, wall, 0, b.entrance);
+  doorFrame(p.metal, E, b.entrance, frame);
   E.forEach((e, k) => {
     if (k % 2 === 0) {
       for (const s of bays(e.len, 3.2, 1).slice(0, -1)) {
         for (let f = 0; f < b.floors; f++) {
-          windowOn(p, e, s + 0.7, s + 2.0, yAt(b, f) + (f === 0 ? 0.1 : 0.8), yAt(b, f) + b.floorHeight - 0.5, glass, frame);
+          const y0 = yAt(b, f) + (f === 0 ? 0.1 : 0.8);
+          if (hitsDoor(e, s + 0.7, s + 2.0, y0, b.entrance)) continue;
+          windowOn(p, e, s + 0.7, s + 2.0, y0, yAt(b, f) + b.floorHeight - 0.5, glass, frame);
         }
       }
-    } else {
+    } else if (!hitsDoor(e, e.len * 0.3, e.len * 0.7, b.baseY, b.entrance)) {
       // Tall glazed gable end.
       windowOn(p, e, e.len * 0.3, e.len * 0.7, b.baseY + 0.1, t - 0.4, glass, frame);
     }
@@ -370,17 +371,21 @@ registerStyle("industrial", {
     const rib = clad.clone().offsetHSL(0, 0, -0.06);
     const t = top(b);
     plinth(p, b, b.footprint, P.concrete[1]);
-    walls(p.matte, E, b.baseY, t, clad);
+    walls(p.matte, E, b.baseY, t, clad, 0, b.entrance);
     for (const e of E) {
-      for (const s of bays(e.len, 1.6)) box(p.matte, e, s - 0.06, s + 0.06, b.baseY + 0.3, t - 1.6, 0, 0.1, rib);
+      for (const s of bays(e.len, 1.6)) {
+        if (!hitsDoor(e, s - 0.06, s + 0.06, b.baseY, b.entrance)) box(p.matte, e, s - 0.06, s + 0.06, b.baseY + 0.3, t - 1.6, 0, 0.1, rib);
+      }
       panel(p.glass, e, 0.3, e.len - 0.3, t - 1.5, t - 0.4, 0.12, P.glassLight);
     }
-    const front = E[longestEdge(E)];
+    // Loading doors; the open one is the way in.
+    const front = E[frontEdge(E, b.entrance)];
     const doors = bays(front.len, 9, 3);
     for (let k = 0; k + 1 < doors.length; k++) {
       const c = (doors[k] + doors[k + 1]) / 2;
-      panel(p.metal, front, c - 2.2, c + 2.2, b.baseY, b.baseY + 4.6, 0.14, P.charcoal[0]);
+      if (!hitsDoor(front, c - 2.2, c + 2.2, b.baseY, b.entrance)) panel(p.metal, front, c - 2.2, c + 2.2, b.baseY, b.baseY + 4.6, 0.14, P.charcoal[0]);
     }
+    doorFrame(p.metal, E, b.entrance, P.charcoal[0]);
     cap(p.matte, b.footprint, t, P.roof);
     parapet(p.matte, E, t, 0.6, rib);
     for (let k = 0; k < 3; k++) {
@@ -405,7 +410,8 @@ registerStyle("civic", {
     const t = top(b);
     plinth(p, b, fp, P.concrete[2]);
     const core = insetConvex(fp, 3) ?? fp;
-    walls(p.glass, edgesOf(core), b.baseY, g, glass);
+    walls(p.glass, edgesOf(core), b.baseY, g, glass, 0, b.entrance);
+    doorFrame(p.metal, edgesOf(core), b.entrance, P.frame[0]);
     cap(p.matte, core, b.baseY + 0.02, P.concrete[2]); // arcade floor
     for (const e of E) for (const s of bays(e.len, 6, 0.6)) box(p.matte, e, s - 0.35, s + 0.35, b.baseY, g, -0.7, 0, stone);
     walls(p.matte, E, g, t, stone);

@@ -6,6 +6,7 @@
  * edge, `y` meters up, `out` meters in front of the wall plane.
  */
 import { Color, ShapeUtils, Vector2 } from "three";
+import type { Entrance } from "../engine/components";
 import { centroid, signedArea, type P2 } from "../geom/polygon";
 import { MeshBuilder, type V3 } from "../render/meshBuilder";
 
@@ -92,21 +93,74 @@ export function box(
   mb.quadFacing(p(s1, y0, out0), p(s1, y0, out1), p(s1, y1, out1), p(s1, y1, out0), t, c); // end side
 }
 
+/** Where a doorway crosses this edge, in edge space; null if it is on another edge. */
+export function doorOn(e: Edge, door?: Entrance): { s0: number; s1: number; top: number } | null {
+  if (!door) return null;
+  const dx = door.x - e.a[0];
+  const dz = door.z - e.a[1];
+  if (Math.abs(dx * e.nx + dz * e.nz) > 0.3) return null;
+  const s = dx * e.tx + dz * e.tz;
+  if (s < 0 || s > e.len) return null;
+  return { s0: s - door.width / 2, s1: s + door.width / 2, top: door.y + door.height };
+}
+
+/** Whether the rectangle s0..s1 (from height y0 up) on this edge overlaps the doorway. */
+export function hitsDoor(e: Edge, s0: number, s1: number, y0: number, door?: Entrance): boolean {
+  const d = doorOn(e, door);
+  return !!d && s1 > d.s0 - 0.2 && s0 < d.s1 + 0.2 && y0 < d.top;
+}
+
+/** Like `panel`, but leaves the doorway open. */
+export function panelAround(
+  mb: MeshBuilder,
+  e: Edge,
+  s0: number,
+  s1: number,
+  y0: number,
+  y1: number,
+  out: number,
+  c: Color,
+  door?: Entrance,
+) {
+  const d = doorOn(e, door);
+  if (!d || d.s1 <= s0 || d.s0 >= s1 || d.top <= y0) return panel(mb, e, s0, s1, y0, y1, out, c);
+  if (d.s0 > s0) panel(mb, e, s0, d.s0, y0, y1, out, c);
+  if (d.s1 < s1) panel(mb, e, d.s1, s1, y0, y1, out, c);
+  if (d.top < y1) panel(mb, e, Math.max(s0, d.s0), Math.min(s1, d.s1), d.top, y1, out, c);
+}
+
+/** A slim frame around the doorway on whichever edge holds it. */
+export function doorFrame(mb: MeshBuilder, edges: Edge[], door: Entrance | undefined, c: Color) {
+  for (const e of edges) {
+    const d = doorOn(e, door);
+    if (!d) continue;
+    box(mb, e, d.s0 - 0.12, d.s0, door!.y, d.top, -0.05, 0.12, c);
+    box(mb, e, d.s1, d.s1 + 0.12, door!.y, d.top, -0.05, 0.12, c);
+    box(mb, e, d.s0 - 0.12, d.s1 + 0.12, d.top, d.top + 0.12, -0.05, 0.12, c);
+  }
+}
+
 /** A horizontal band wrapping the whole perimeter (slab edge, cornice, parapet). */
 export function band(mb: MeshBuilder, edges: Edge[], y0: number, y1: number, out: number, c: Color, inset = 0) {
   for (const e of edges) box(mb, e, -out, e.len + out, y0, y1, -inset, out, c);
 }
 
-/** Vertical walls of a prism from y0 to y1 (no caps). */
-export function walls(mb: MeshBuilder, edges: Edge[], y0: number, y1: number, c: Color, out = 0) {
-  for (const e of edges) panel(mb, e, 0, e.len, y0, y1, out, c);
+/** Vertical walls of a prism from y0 to y1 (no caps), leaving `door` open if given. */
+export function walls(mb: MeshBuilder, edges: Edge[], y0: number, y1: number, c: Color, out = 0, door?: Entrance) {
+  for (const e of edges) panelAround(mb, e, 0, e.len, y0, y1, out, c, door);
 }
 
-/** A horizontal polygon at height y, facing up (or down with `down`). */
-export function cap(mb: MeshBuilder, poly: readonly P2[], y: number, c: Color, down = false) {
-  const contour = poly.map(([x, z]) => new Vector2(x, z));
-  for (const [i, j, k] of ShapeUtils.triangulateShape(contour, [])) {
-    mb.triFacing([poly[i][0], y, poly[i][1]], [poly[j][0], y, poly[j][1]], [poly[k][0], y, poly[k][1]], [0, down ? -1 : 1, 0], c);
+/** A horizontal polygon at height y, facing up (or down with `down`), with optional holes. */
+export function cap(mb: MeshBuilder, poly: readonly P2[], y: number, c: Color, down = false, holes: readonly (readonly P2[])[] = []) {
+  const ring = (pts: readonly P2[], ccw: boolean) => {
+    const v = pts.map(([x, z]) => new Vector2(x, z));
+    return ShapeUtils.isClockWise(v) === ccw ? v.reverse() : v;
+  };
+  const contour = ring(poly, true);
+  const holeRings = holes.map((h) => ring(h, false));
+  const all = [...contour, ...holeRings.flat()];
+  for (const [i, j, k] of ShapeUtils.triangulateShape(contour, holeRings)) {
+    mb.triFacing([all[i].x, y, all[i].y], [all[j].x, y, all[j].y], [all[k].x, y, all[k].y], [0, down ? -1 : 1, 0], c);
   }
 }
 
@@ -148,9 +202,15 @@ export function rngFor(seed: number) {
 }
 export type Rng = ReturnType<typeof rngFor>;
 
-/** Index of the longest edge (a proxy for the street front). */
+/** Index of the longest edge. */
 export function longestEdge(edges: Edge[]): number {
   let best = 0;
   for (let k = 1; k < edges.length; k++) if (edges[k].len > edges[best].len) best = k;
   return best;
+}
+
+/** Index of the edge holding the front door, or the longest edge if there is none. */
+export function frontEdge(edges: Edge[], door?: Entrance): number {
+  const k = edges.findIndex((e) => doorOn(e, door));
+  return k >= 0 ? k : longestEdge(edges);
 }
