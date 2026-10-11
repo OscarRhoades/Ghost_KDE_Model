@@ -3,13 +3,14 @@ import { describe, expect, it } from "vitest";
 import { groundPlans } from "../src/buildings/massing";
 import "../src/buildings/index";
 import { coreDataPlugins } from "../src/engine/dataPlugins";
-import { Building, Prop, type PropData } from "../src/engine/components";
+import { Building, Parcel, Patch, Prop, type PropData } from "../src/engine/components";
 import { Engine } from "../src/engine/engine";
 import { parseCity } from "../src/format/schema";
 import { pointInPolygon } from "../src/geom/polygon";
 import { createNavigator, propSegments } from "../src/interiors/nav";
 import { propCatalog, templateFor } from "../src/props/catalog";
 import { propShown } from "../src/props/propView";
+import { clipConvex, PATCH } from "../src/props/landscape";
 
 function load(file: string) {
   const engine = new Engine();
@@ -88,5 +89,45 @@ describe("prop collision", () => {
     // Walker radius 0.3 plus the pole's 0.15: never closer than that.
     expect(closest).toBeGreaterThan(0.4);
     expect(closest).toBeLessThan(0.6);
+  });
+});
+
+describe("landscape", () => {
+  const engine = load("public/cities/demo.city.json");
+  const w = engine.world;
+  const props = [...w.query(Prop)].map((e) => w.read(e, Prop));
+  const parks = [...w.query(Parcel)].map((e) => w.read(e, Parcel)).filter((p) => p.zone === "park");
+
+  it("lays out every park with paths, a centrepiece and trees", () => {
+    const patches = [...w.query(Patch)].map((e) => w.read(e, Patch));
+    expect(patches.filter((p) => p.color === PATCH.gravel).length).toBeGreaterThan(parks.length * 8);
+    for (const park of parks) {
+      const inside = props.filter((p) => pointInPolygon(p.x, p.z, park.polygon));
+      expect(inside.some((p) => ["fountain", "pavilion", "sculpture"].includes(p.kind))).toBe(true);
+      expect(inside.filter((p) => p.kind.startsWith("tree-")).length).toBeGreaterThan(10);
+    }
+  });
+
+  it("gives gardens hedges, yards vehicles and streets parked cars", () => {
+    expect(props.filter((p) => p.kind === "hedge").length).toBeGreaterThan(1000);
+    expect(props.filter((p) => p.kind.startsWith("car-")).length).toBeGreaterThan(1000);
+    expect(props.some((p) => p.kind === "truck" || p.kind.startsWith("container-"))).toBe(true);
+  });
+
+  it("clips convex polygons", () => {
+    const a: [number, number][] = [[0, 0], [10, 0], [10, 10], [0, 10]];
+    const b: [number, number][] = [[5, 5], [15, 5], [15, 15], [5, 15]];
+    const c = clipConvex(a, b)!;
+    expect(Math.abs(c.reduce((s, p, i) => s + p[0] * c[(i + 1) % c.length][1] - c[(i + 1) % c.length][0] * p[1], 0) / 2)).toBeCloseTo(25);
+    expect(clipConvex(a, [[20, 20], [30, 20], [30, 30]])).toBeNull();
+  });
+
+  it("can be switched off in the file", () => {
+    const city = parseCity(JSON.parse(readFileSync("public/cities/tiny.city.json", "utf8")));
+    const plain = new Engine();
+    for (const p of coreDataPlugins()) plain.use(p);
+    plain.load({ ...city, streetscape: { trees: true, lamps: true, furniture: true, markings: true, parking: false, landscape: false, density: 1 } });
+    expect([...plain.world.query(Patch)].length).toBe(0);
+    expect([...plain.world.query(Prop)].some((e) => plain.world.read(e, Prop).kind.startsWith("car-"))).toBe(false);
   });
 });

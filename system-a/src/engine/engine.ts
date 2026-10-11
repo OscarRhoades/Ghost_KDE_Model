@@ -31,6 +31,8 @@ export const LoadOrder = {
   frontage: 40,
   /** Street dressing, after roads, buildings and front doors. */
   streetscape: 50,
+  /** Parks, plazas, gardens and yards. */
+  landscape: 55,
   /** Runs after every data section is in the world. */
   conform: 100,
 } as const;

@@ -79,6 +79,16 @@ export interface PropData {
 }
 export const Prop = defineComponent<PropData>("Prop");
 
+/** A flat ground overlay (path, paving, pond, sandpit) draped on the terrain. Derived, never saved. */
+export interface PatchData {
+  /** Convex outline. */
+  poly: P2[];
+  color: string;
+  /** Height above the terrain (later patches should sit higher). */
+  lift: number;
+}
+export const Patch = defineComponent<PatchData>("Patch");
+
 /** A doorway in a wall: center on the ground plane, the wall's direction, size. */
 export interface Entrance {
   x: number;

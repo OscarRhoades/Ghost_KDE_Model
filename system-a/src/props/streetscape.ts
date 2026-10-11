@@ -10,6 +10,7 @@ import { pointInPolygon } from "../geom/polygon";
 import { FootprintGrid } from "../physics/collision";
 import { densify, edgePath } from "../roads/path";
 import { groundPlans } from "../buildings/massing";
+import { carKind } from "./landscape";
 
 /** Sidewalk surface above the road, matching the road view. */
 export const CURB = 0.22;
@@ -34,7 +35,7 @@ function hash(a: number, b: number): number {
 
 export function placeStreetscape(world: World): Placement[] {
   const city = world.getResource(CityR);
-  const opts = { trees: true, lamps: true, furniture: true, density: 1, ...(city?.streetscape ?? {}) };
+  const opts = { trees: true, lamps: true, furniture: true, parking: true, density: 1, ...(city?.streetscape ?? {}) };
   const { hf, waterLevel } = world.resource(TerrainR);
   const out: Placement[] = [];
 
@@ -143,6 +144,20 @@ export function placeStreetscape(world: World): Placement[] {
         // Bike racks and scooter docks along the sidewalk.
         for (let t = trimA + 30; t < L - trimB - 4; t += spacing(140)) place("bike-rack", t, 1, half + r.sidewalk * 0.5, "along", true);
         if (r.kind === "avenue") for (let t = trimA + 70; t < L - trimB - 4; t += spacing(260)) place("scooter-dock", t, -1, half + r.sidewalk * 0.5, "along", true);
+      }
+      if (r.kind === "street" && opts.parking !== false) {
+        // Parked cars along both curbs, facing the traffic on their side.
+        for (const side of [1, -1]) {
+          for (let t = trimA + 4; t < L - trimB - 3; t += 6.2) {
+            const h = hash(Math.round(t * 10) + seed, side);
+            if (h > 0.55) continue;
+            const p = at(t);
+            const x = p.x + p.nx * side * (half - 1.15);
+            const z = p.z + p.nz * side * (half - 1.15);
+            if (nearDoor(x, z)) continue;
+            add(carKind(Math.round(h * 1e6)), x, z, facing(p.tx * side, p.tz * side), 0.08, true);
+          }
+        }
       }
       if (r.kind === "avenue" && L - trimA - trimB > 40) {
         // A bus stop on one side, mid-block.

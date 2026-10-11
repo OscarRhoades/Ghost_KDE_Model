@@ -307,9 +307,9 @@ propCatalog.register("playground", {
 propCatalog.register("court", {
   build(p) {
     block(p.matte, -7, 0, -12, 7, 0.04, 12, hex("#4f7fae"));
-    block(p.glow, -6.6, 0.04, -0.05, 6.6, 0.05, 0.05, hex("#f2f1ee"));
-    for (const z of [-11.6, 11.6]) block(p.glow, -6.6, 0.04, z - 0.05, 6.6, 0.05, z + 0.05, hex("#f2f1ee"));
-    for (const x of [-6.6, 6.6]) block(p.glow, x - 0.05, 0.04, -11.6, x + 0.05, 0.05, 11.6, hex("#f2f1ee"));
+    block(p.matte, -6.6, 0.04, -0.05, 6.6, 0.05, 0.05, hex("#f2f1ee"));
+    for (const z of [-11.6, 11.6]) block(p.matte, -6.6, 0.04, z - 0.05, 6.6, 0.05, z + 0.05, hex("#f2f1ee"));
+    for (const x of [-6.6, 6.6]) block(p.matte, x - 0.05, 0.04, -11.6, x + 0.05, 0.05, 11.6, hex("#f2f1ee"));
     block(p.metal, -6.8, 0, -0.05, -6.7, 1.0, 0.05, STEEL);
     block(p.metal, 6.7, 0, -0.05, 6.8, 1.0, 0.05, STEEL);
     block(p.matte, -6.7, 0.8, -0.02, 6.7, 1.0, 0.02, hex("#f2f1ee"));
@@ -349,6 +349,157 @@ propCatalog.register("picnic-table", {
     for (const x of [-0.8, 0.8]) block(p.matte, x - 0.05, 0, -0.75, x + 0.05, 0.72, 0.75, TIMBER);
   },
 }, { tags: ["park"] });
+
+// ---- Vehicles ------------------------------------------------------------------------
+
+const TYRE = hex("#25282c");
+const WINDOW = hex("#3d4b57");
+export const CAR_COLORS: Record<string, string> = {
+  white: "#eef0f0", silver: "#b9bec4", graphite: "#4a4f56", black: "#22262b",
+  red: "#b8382f", blue: "#2f5d8f", green: "#4f7a5a", sand: "#cdb58a",
+};
+const CAR_TYPES: Record<string, { len: number; wid: number; body: number; cabin: [number, number, number]; box?: boolean }> = {
+  // cabin: [start along z from the rear, length, height]
+  sedan: { len: 4.5, wid: 1.8, body: 0.75, cabin: [1.1, 2.2, 0.55] },
+  hatch: { len: 3.9, wid: 1.75, body: 0.8, cabin: [0.35, 2.3, 0.6] },
+  suv: { len: 4.7, wid: 1.9, body: 0.95, cabin: [0.5, 3.0, 0.65] },
+  van: { len: 5.2, wid: 2.0, body: 1.0, cabin: [0.2, 4.0, 1.0], box: true },
+};
+
+function car(p: Parts, type: (typeof CAR_TYPES)[string], paint: Color) {
+  const hl = type.len / 2, hw = type.wid / 2, y0 = 0.32, y1 = y0 + type.body;
+  block(p.metal, -hw, y0, -hl, hw, y1, hl, paint);
+  const [c0, cl, ch] = type.cabin;
+  const z0 = -hl + c0, z1 = z0 + cl;
+  // Glass band with a painted roof on top.
+  block(p.glass, -hw + 0.08, y1, z0, hw - 0.08, y1 + ch * 0.85, z1, WINDOW);
+  block(p.metal, -hw + 0.1, y1 + ch * 0.85, z0 + (type.box ? 0 : 0.1), hw - 0.1, y1 + ch, z1 - (type.box ? 0 : 0.15), paint);
+  for (const [x, z] of [[-hw + 0.02, -hl + 0.75], [hw - 0.02, -hl + 0.75], [-hw + 0.02, hl - 0.8], [hw - 0.02, hl - 0.8]]) {
+    block(p.matte, x - 0.12, 0, z - 0.33, x + 0.12, 0.62, z + 0.33, TYRE);
+  }
+  // Head and tail lights (+z is the front).
+  block(p.glow, -hw + 0.15, y1 - 0.25, hl, -hw + 0.5, y1 - 0.1, hl + 0.02, hex("#fff6dc"));
+  block(p.glow, hw - 0.5, y1 - 0.25, hl, hw - 0.15, y1 - 0.1, hl + 0.02, hex("#fff6dc"));
+  block(p.glow, -hw + 0.1, y1 - 0.22, -hl - 0.02, -hw + 0.45, y1 - 0.1, -hl, hex("#d0392f"));
+  block(p.glow, hw - 0.45, y1 - 0.22, -hl - 0.02, hw - 0.1, y1 - 0.1, -hl, hex("#d0392f"));
+}
+
+for (const [tname, type] of Object.entries(CAR_TYPES)) {
+  for (const [cname, color] of Object.entries(CAR_COLORS)) {
+    propCatalog.register(`car-${tname}-${cname}`, {
+      solid: { hx: type.wid / 2, hz: type.len / 2 },
+      build: (p) => car(p, type, hex(color)),
+    }, { tags: ["car", tname] });
+  }
+}
+
+propCatalog.register("truck", {
+  solid: { hx: 1.25, hz: 5.5 },
+  build(p) {
+    const cab = hex("#e7e4dc");
+    block(p.metal, -1.2, 0.5, 3.0, 1.2, 3.0, 5.5, cab);
+    block(p.glass, -1.15, 1.9, 5.5, 1.15, 2.8, 5.52, WINDOW);
+    block(p.metal, -1.25, 0.9, -5.5, 1.25, 3.9, 2.8, hex("#c9cdd1"));
+    block(p.metal, -1.2, 0.5, -5.5, 1.2, 0.9, 5.4, STEEL);
+    for (const z of [-4.4, -3.2, 4.2]) for (const x of [-1.15, 1.15]) block(p.matte, x - 0.15, 0, z - 0.5, x + 0.15, 1.0, z + 0.5, TYRE);
+  },
+}, { tags: ["vehicle", "yard"] });
+
+for (const [name, color] of Object.entries({ rust: "#9b4a33", blue: "#2f6397", green: "#3e7a5c", grey: "#8d949b" })) {
+  propCatalog.register(`container-${name}`, {
+    solid: { hx: 1.22, hz: 3.05 },
+    build(p) {
+      const c = hex(color);
+      block(p.metal, -1.22, 0, -3.05, 1.22, 2.6, 3.05, c);
+      for (let k = 0; k < 9; k++) block(p.metal, -1.25, 0.05, -2.8 + k * 0.7, 1.25, 2.55, -2.7 + k * 0.7, c.clone().offsetHSL(0, 0, -0.06));
+    },
+  }, { tags: ["yard"] });
+}
+
+propCatalog.register("pallets", {
+  solid: { hx: 0.6, hz: 0.6 },
+  build(p) {
+    block(p.matte, -0.6, 0, -0.6, 0.6, 0.15, 0.6, TIMBER);
+    block(p.matte, -0.55, 0.15, -0.55, 0.55, 1.1, 0.55, hex("#c9b48e"));
+  },
+}, { tags: ["yard"] });
+
+// ---- Gardens -------------------------------------------------------------------------
+
+propCatalog.register("shed", {
+  solid: { hx: 1.3, hz: 1.0 },
+  build(p) {
+    block(p.matte, -1.3, 0, -1, 1.3, 2.1, 1, hex("#7b6650"));
+    block(p.matte, -1.45, 2.1, -1.15, 1.45, 2.25, 1.15, hex("#3e4247"));
+    block(p.matte, -0.4, 0, 1, 0.4, 1.9, 1.04, hex("#5c4a39"));
+  },
+}, { tags: ["garden"] });
+
+propCatalog.register("parasol-table", {
+  solid: { r: 0.5 },
+  build(p) {
+    block(p.matte, -0.5, 0.7, -0.5, 0.5, 0.75, 0.5, hex("#efece6"));
+    cylinder(p.metal, 0, 0, 0.04, 0.04, 0, 2.3, STEEL, 4);
+    cylinder(p.matte, 0, 0, 1.5, 0.05, 1.95, 2.35, hex("#e6dccb"), 8);
+    for (const [x, z] of [[-0.85, 0], [0.85, 0]]) block(p.matte, x - 0.22, 0, z - 0.22, x + 0.22, 0.45, z + 0.22, hex("#efece6"));
+  },
+}, { tags: ["garden", "cafe"] });
+
+propCatalog.register("shrub", {
+  build(p) {
+    blob(p.matte, 0, 0.5, 0, 0.8, 0.6, 0.8, hex("#5f8d47"), 11);
+  },
+}, { tags: ["garden", "park"] });
+
+propCatalog.register("trampoline", {
+  solid: { r: 1.7 },
+  build(p) {
+    cylinder(p.matte, 0, 0, 1.7, 1.7, 0.75, 0.85, hex("#2f3439"), 10);
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2;
+      block(p.metal, Math.cos(a) * 1.6 - 0.04, 0, Math.sin(a) * 1.6 - 0.04, Math.cos(a) * 1.6 + 0.04, 0.8, Math.sin(a) * 1.6 + 0.04, STEEL);
+    }
+  },
+}, { tags: ["garden"] });
+
+propCatalog.register("reeds", {
+  build(p) {
+    for (let k = 0; k < 7; k++) {
+      const a = k * 2.4, r = 0.2 + (k % 3) * 0.25;
+      cylinder(p.matte, Math.cos(a) * r, Math.sin(a) * r, 0.05, 0, 0, 1.0 + (k % 3) * 0.3, hex("#7d9a4e"), 3, false);
+    }
+  },
+}, { tags: ["park", "water"] });
+
+propCatalog.register("rock", {
+  solid: { r: 0.7 },
+  build(p) {
+    blob(p.matte, 0, 0.25, 0, 0.9, 0.55, 0.7, hex("#a39d92"), 13);
+  },
+}, { tags: ["park"] });
+
+propCatalog.register("sculpture", {
+  solid: { r: 1.0 },
+  build(p) {
+    block(p.matte, -1, 0, -1, 1, 0.6, 1, hex("#d8d2c6"));
+    cylinder(p.metal, 0, 0, 0.35, 0.05, 0.6, 4.2, hex("#b97a46"), 5);
+    blob(p.metal, 0, 3.2, 0, 0.8, 0.8, 0.8, hex("#c9894f"), 14);
+  },
+}, { tags: ["plaza", "park"] });
+
+propCatalog.register("table-chairs", {
+  solid: { r: 0.8 },
+  build(p) {
+    cylinder(p.metal, 0, 0, 0.06, 0.06, 0, 0.72, STEEL, 4);
+    cylinder(p.metal, 0, 0, 0.4, 0.4, 0.72, 0.76, hex("#e9e6df"), 8);
+    for (let k = 0; k < 3; k++) {
+      const a = (k / 3) * Math.PI * 2;
+      const x = Math.cos(a) * 0.7, z = Math.sin(a) * 0.7;
+      block(p.metal, x - 0.2, 0.42, z - 0.2, x + 0.2, 0.46, z + 0.2, hex("#3d5a52"));
+      block(p.metal, x - 0.03, 0, z - 0.03, x + 0.03, 0.42, z + 0.03, STEEL);
+    }
+  },
+}, { tags: ["cafe", "plaza"] });
 
 // ---- Templates -------------------------------------------------------------------------
 

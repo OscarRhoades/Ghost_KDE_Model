@@ -6,6 +6,7 @@ import { edgesOf } from "../buildings/kit";
 import { shellOf } from "../buildings/massing";
 import { Building, RoadEdge, type BuildingData, type Entrance } from "../engine/components";
 import { LoadOrder, type Plugin } from "../engine/engine";
+import type { World } from "../ecs/world";
 import { segmentDistance } from "../geom/polygon";
 import { SegmentGrid, type Segment } from "../physics/walls";
 import { edgePath } from "../roads/path";
@@ -25,7 +26,8 @@ export function doorSize(style: string): { width: number; height: number } {
   }
 }
 
-const distToRoad = (roads: SegmentGrid, x: number, z: number) => {
+/** Distance from (x, z) to the nearest road centerline. */
+export const distToRoad = (roads: SegmentGrid, x: number, z: number) => {
   for (const r of [40, 120, 400]) {
     const near = roads.near(x, z, r);
     if (near.length) return Math.min(...near.map((s) => segmentDistance(x, z, s.ax, s.az, s.bx, s.bz).d));
@@ -68,6 +70,29 @@ export function chooseEntrance(b: BuildingData, roads: SegmentGrid): Entrance | 
   };
 }
 
+/** Road centerlines in a grid; each segment's owner is its road's half width plus sidewalk. */
+export function roadGrid(world: World): SegmentGrid {
+  const roads = new SegmentGrid(64);
+  for (const e of world.query(RoadEdge)) {
+    const r = world.read(e, RoadEdge);
+    const path = edgePath(world, r);
+    for (let k = 1; k < path.length; k++) {
+      const s: Segment = { ax: path[k - 1][0], az: path[k - 1][2], bx: path[k][0], bz: path[k][2], owner: r.width / 2 + r.sidewalk };
+      roads.add(s);
+    }
+  }
+  return roads;
+}
+
+/** Distance from (x, z) to the outer edge of the nearest street's sidewalk (negative on the street). */
+export function distToStreetEdge(roads: SegmentGrid, x: number, z: number): number {
+  for (const r of [40, 120, 400]) {
+    const near = roads.near(x, z, r);
+    if (near.length) return Math.min(...near.map((s) => segmentDistance(x, z, s.ax, s.az, s.bx, s.bz).d - (s.owner as number)));
+  }
+  return Infinity;
+}
+
 export function frontage(): Plugin {
   return {
     name: "frontage",
@@ -76,14 +101,7 @@ export function frontage(): Plugin {
         name: "frontage",
         order: LoadOrder.frontage,
         load(world) {
-          const roads = new SegmentGrid(64);
-          for (const e of world.query(RoadEdge)) {
-            const path = edgePath(world, world.read(e, RoadEdge));
-            for (let k = 1; k < path.length; k++) {
-              const s: Segment = { ax: path[k - 1][0], az: path[k - 1][2], bx: path[k][0], bz: path[k][2] };
-              roads.add(s);
-            }
-          }
+          const roads = roadGrid(world);
           for (const e of world.query(Building)) {
             const b = world.read(e, Building);
             b.entrance = chooseEntrance(b, roads);

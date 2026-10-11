@@ -142,6 +142,10 @@ export const Streetscape = z.object({
   lamps: z.boolean().default(true),
   furniture: z.boolean().default(true),
   markings: z.boolean().default(true),
+  /** Cars parked along streets and in yards. */
+  parking: z.boolean().default(true),
+  /** Park, plaza, garden and yard layouts. */
+  landscape: z.boolean().default(true),
   /** Overall density multiplier (1 = default spacing). */
   density: finite.positive().default(1),
 });

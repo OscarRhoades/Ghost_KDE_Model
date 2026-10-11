@@ -67,7 +67,7 @@ export function roadView(): Plugin {
                 if (zebra) for (let o = -half + 0.5; o + 0.5 <= half - 0.3; o += 1.1) ribbon(mb, zebra, o, o + 0.55, MARK_Y, C.marking);
                 const stop = section(path, from(j + 3.4), from(j + 3.75));
                 // Traffic drives on the right: the stop line spans the approaching half.
-                if (stop) ribbon(mb, stop, atA ? 0 : -half + 0.3, atA ? half - 0.3 : 0, MARK_Y, C.marking);
+                if (stop) ribbon(mb, stop, atA ? -half + 0.3 : 0, atA ? 0 : half - 0.3, MARK_Y, C.marking);
               }
               const lined = trim(path, (degree.get(r.a) ?? 0) > 2 ? (junction.get(r.a) ?? 0) + 4 : 0, (degree.get(r.b) ?? 0) > 2 ? (junction.get(r.b) ?? 0) + 4 : 0);
               if (lined && r.kind === "avenue") {

@@ -251,7 +251,9 @@ export function generateDemo({ seed, size, cell }: DemoOptions): CityFileInput {
             const fp = insetConvex(q, 1.5);
             if (fp) addBuilding(pid, fp, range(rng, 3, 8), pick(rng, ["brick-midrise", "apartment"]));
           } else if (zone === "industrial") {
-            const fp = insetConvex(q, 6);
+            // Sheds sit to one side of the lot, leaving a yard for trucks and parking.
+            const back = Math.floor(rng() * 4);
+            const fp = insetConvex(q, [0, 1, 2, 3].map((k) => (k === back ? 20 : 5)));
             if (fp) addBuilding(pid, fp, range(rng, 1, 3), "industrial", "flat", 5.5);
           } else {
             const inset = insetConvex(q, 4);
