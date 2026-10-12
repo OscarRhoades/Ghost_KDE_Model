@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Origami Crane</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <main class="stage">
+        <div id="viewport" class="viewport" aria-label="3D folding view"></div>
+        <div class="stage-tools">
+          <button id="reset-view" class="ghost" title="Reset camera">Reset view</button>
+          <label class="toggle"><input type="checkbox" id="opt-arrows" checked /> Arrows</label>
+          <label class="toggle"><input type="checkbox" id="opt-lines" checked /> Fold lines</label>
+          <label class="toggle"><input type="checkbox" id="opt-creases" checked /> Creases</label>
+        </div>
+        <div class="transport">
+          <button id="prev" class="icon" title="Previous step (←)" aria-label="Previous step">
+            <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></svg>
+          </button>
+          <button id="play" class="icon primary" title="Play / pause (space)" aria-label="Play">
+            <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" /></svg>
+            <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>
+            <svg class="i-replay" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 0 2.05-4.95M5 4v4h4" /></svg>
+          </button>
+          <button id="next" class="icon" title="Next step (→)" aria-label="Next step">
+            <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+          <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Scrub through this step" />
+          <select id="speed" aria-label="Playback speed">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </div>
+      </main>
+      <aside class="panel">
+        <header class="brand">
+          <h1>Crane</h1>
+          <p>Traditional orizuru, folded step by step</p>
+        </header>
+        <section class="instruction" aria-live="polite">
+          <div class="counter" id="counter"></div>
+          <h2 id="title"></h2>
+          <p id="text"></p>
+        </section>
+        <section class="cp">
+          <div class="cp-head">
+            <h3>Crease pattern</h3>
+            <span class="legend"
+              ><i class="lg-valley"></i>Valley <i class="lg-mountain"></i>Mountain <i class="lg-flat"></i>Flat</span
+            >
+          </div>
+          <svg id="cp" role="img" aria-label="Crease pattern after this step"></svg>
+          <p class="hint">After this step, seen from the colored side. Bold lines are new or changed.</p>
+        </section>
+        <section class="steps">
+          <h3>Steps</h3>
+          <ol id="steps"></ol>
+        </section>
+      </aside>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
